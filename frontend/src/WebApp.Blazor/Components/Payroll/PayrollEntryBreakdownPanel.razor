@@ -86,7 +86,7 @@
                             <td style="display: flex; align-items: center; gap: 0.5rem;">
                                 @if (hasBreakdown)
                                 {
-                                    <Icon Kind="@(isExpanded ? IconKind.ChevronDown : IconKind.ChevronRight)" Size="IconSize.Sm" />
+                                    <Icon Kind="IconKind.ChevronRight" Size="IconSize.Default" style="@(isExpanded ? "transform: rotate(90deg); transition: transform 0.2s;" : "transition: transform 0.2s;")" />
                                 }
                                 @ResolveProjectName(total.ProjectId)
                             </td>
