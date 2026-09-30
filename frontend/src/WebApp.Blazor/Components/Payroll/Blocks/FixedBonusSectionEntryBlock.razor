@@ -43,6 +43,21 @@
         </div>
     }
 
+    @if (!IsBalanced() && State.ProjectEntries.Count > 0)
+    {
+        var total = State.FullBaseSalary ?? 0m;
+        var allocated = State.ProjectEntries.Sum(e => e.Value);
+        var remaining = total - allocated;
+        <div style="background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; border-radius: 4px; padding: 12px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+            <Icon Kind="IconKind.AlertTriangle" Size="IconSize.Default" />
+            <div>
+                <strong>Atenção:</strong> O rateio não está mais equilibrado.<br/>
+                Alocado: <strong>@PayrollInputHelpers.FormatMoney(allocated)</strong> | 
+                Restante: <strong style="@(remaining != 0 ? "color: red;" : "")">@PayrollInputHelpers.FormatMoney(remaining)</strong>
+            </div>
+        </div>
+    }
+
     @for (var i = 0; i < State.ProjectEntries.Count; i++)
     {
         var index = i;
@@ -88,13 +103,44 @@
         var project = Options.Projects.FirstOrDefault();
         if (project is null) return;
         State.ProjectEntries.Add(new ProjectEntryDto(project.Id, 0m));
+        RebalanceProjects();
         await OnChanged.InvokeAsync();
     }
 
     private async Task RemoveProjectAsync(int index)
     {
         State.ProjectEntries.RemoveAt(index);
+        RebalanceProjects();
         await OnChanged.InvokeAsync();
+    }
+
+    private void RebalanceProjects()
+    {
+        var total = State.FullBaseSalary ?? 0m;
+        var count = State.ProjectEntries.Count;
+        if (count == 0) return;
+        
+        var equalPart = Math.Round(total / count, 2);
+        for (int i = 0; i < count; i++)
+        {
+            var val = (i == count - 1) ? (total - (equalPart * (count - 1))) : equalPart;
+            State.ProjectEntries[i] = State.ProjectEntries[i] with { Value = val };
+        }
+    }
+
+    private bool IsBalanced()
+    {
+        var total = State.FullBaseSalary ?? 0m;
+        var count = State.ProjectEntries.Count;
+        if (count == 0) return true;
+        
+        var equalPart = Math.Round(total / count, 2);
+        for (int i = 0; i < count; i++)
+        {
+            var expected = (i == count - 1) ? (total - (equalPart * (count - 1))) : equalPart;
+            if (State.ProjectEntries[i].Value != expected) return false;
+        }
+        return true;
     }
 
     private async Task UpdateProjectAsync(int index, string? value)

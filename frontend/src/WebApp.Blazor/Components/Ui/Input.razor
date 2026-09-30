@@ -8,6 +8,16 @@
         <label class="@LabelClass" for="@InputId">@Label</label>
     }
     <div class="@WrapperClass">
+        @if (PrefixIcon.HasValue)
+        {
+            <span class="ui-input-prefix-icon" style="color: @(PrefixColor ?? "inherit"); display: flex; align-items: center; margin-right: 4px;" aria-hidden="true">
+                <Icon Kind="PrefixIcon.Value" Size="IconSize.Default" />
+            </span>
+        }
+        @if (!string.IsNullOrEmpty(PrefixText))
+        {
+            <span class="ui-input-prefix" style="color: @(PrefixColor ?? "inherit"); margin-right: 4px;" aria-hidden="true">@PrefixText</span>
+        }
         @if (IsMoney)
         {
             <span class="ui-input-prefix" aria-hidden="true">R$</span>
@@ -47,6 +57,9 @@
     [Parameter] public int DebounceMs { get; set; }
     [Parameter] public string? Value { get; set; }
     [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public IconKind? PrefixIcon { get; set; }
+    [Parameter] public string? PrefixText { get; set; }
+    [Parameter] public string? PrefixColor { get; set; }
     [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
 
     private ElementReference _inputRef;

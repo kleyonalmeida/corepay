@@ -36,7 +36,11 @@ public enum IconKind
     ChevronRight,
     Download,
     Eye,
-    EyeOff
+    EyeOff,
+    AlertTriangle,
+    ArrowUp,
+    ArrowDown,
+    Minus
 }
 
 /// <summary>

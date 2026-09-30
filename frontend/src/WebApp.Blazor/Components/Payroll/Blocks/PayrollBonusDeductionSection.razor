@@ -18,7 +18,7 @@
                     <option value="@option.Id">@option.Name</option>
                 }
             </Select>
-            <Input Label="Valor" IsMoney="true" Value="@PayrollInputHelpers.FormatMoney(entry.Value)" ValueChanged="@(v => UpdateBonusValueAsync(index, v))" />
+            <Input Label="Valor" IsMoney="true" PrefixText="+" PrefixIcon="IconKind.ArrowUp" PrefixColor="#22c55e" Value="@PayrollInputHelpers.FormatMoney(entry.Value)" ValueChanged="@(v => UpdateBonusValueAsync(index, v))" />
             <Input Label="Justificativa" Value="@entry.Justification" ValueChanged="@(v => UpdateBonusJustificationAsync(index, v))" />
             <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Sm" OnClick="@(() => RemoveBonusAsync(index))">
                 <Icon Kind="IconKind.Trash2" Size="IconSize.Default" />
@@ -41,7 +41,7 @@
         var entry = State.DeductionEntries[index];
         <div class="payroll-nested-block__row">
             <Input Label="Descrição" Value="@entry.Description" ValueChanged="@(v => UpdateDeductionDescriptionAsync(index, v))" />
-            <Input Label="Valor" IsMoney="true" Value="@PayrollInputHelpers.FormatMoney(entry.Value)" ValueChanged="@(v => UpdateDeductionValueAsync(index, v))" />
+            <Input Label="Valor" IsMoney="true" PrefixText="-" PrefixIcon="IconKind.ArrowDown" PrefixColor="#ef4444" Value="@PayrollInputHelpers.FormatMoney(entry.Value)" ValueChanged="@(v => UpdateDeductionValueAsync(index, v))" />
             <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Sm" OnClick="@(() => RemoveDeductionAsync(index))">
                 <Icon Kind="IconKind.Trash2" Size="IconSize.Default" />
             </Button>

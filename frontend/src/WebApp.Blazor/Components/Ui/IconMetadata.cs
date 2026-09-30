@@ -35,7 +35,11 @@ internal static class IconMetadata
         [IconKind.ChevronRight] = "chevron-right",
         [IconKind.Download] = "download",
         [IconKind.Eye] = "eye",
-        [IconKind.EyeOff] = "eye-off"
+        [IconKind.EyeOff] = "eye-off",
+        [IconKind.AlertTriangle] = "triangle-alert",
+        [IconKind.ArrowUp] = "arrow-up",
+        [IconKind.ArrowDown] = "arrow-down",
+        [IconKind.Minus] = "minus"
     };
 
     public static string GetLucideName(IconKind kind) =>
