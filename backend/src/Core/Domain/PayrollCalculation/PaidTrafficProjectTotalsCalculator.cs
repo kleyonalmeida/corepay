@@ -25,7 +25,7 @@ public static class PaidTrafficProjectTotalsCalculator
                 return Result<IReadOnlyList<ProjectTotalAllocation>>.Failure(commissionResult.Error!);
             }
 
-            accumulator.Add(projectEntry.ProjectId, commissionResult.Value);
+            accumulator.AddCommission(projectEntry.ProjectId, commissionResult.Value);
         }
 
         var fullBase = BaseSalaryResolver.Resolve(input);
@@ -44,7 +44,7 @@ public static class PaidTrafficProjectTotalsCalculator
             return Result<IReadOnlyList<ProjectTotalAllocation>>.Failure(allocationResult.Error!);
         }
 
-        accumulator.AddRange(allocationResult.Value);
+        accumulator.AddRangeFixed(allocationResult.Value);
         return Result<IReadOnlyList<ProjectTotalAllocation>>.Success(accumulator.ToList());
     }
 }

@@ -58,7 +58,7 @@ public static class ProjectDisplayHelper
         {
             foreach (var breakdown in revenueEntry.ProjectBreakdown)
             {
-                accumulator.Add(breakdown.ProjectId, breakdown.Amount);
+                accumulator.AddOther(breakdown.ProjectId, breakdown.Amount);
             }
         }
 
@@ -68,7 +68,7 @@ public static class ProjectDisplayHelper
                 .SelectMany(entry => entry.ProjectBreakdown)
                 .Any(breakdown => breakdown.ProjectId == allocation.ProjectId))
             {
-                accumulator.Add(allocation.ProjectId, allocation.Amount);
+                accumulator.AddRange([allocation]);
             }
         }
 
@@ -90,7 +90,7 @@ public static class ProjectDisplayHelper
             .Amount;
 
         return Result<IReadOnlyList<ProjectTotalAllocation>>.Success(
-            [new ProjectTotalAllocation(affiliatesProjectId, amount)]);
+            [new ProjectTotalAllocation(affiliatesProjectId, amount, Other: amount)]);
     }
 
     private static Result<IReadOnlyList<ProjectTotalAllocation>> NormalizeLimaKarttosDisplay(
@@ -108,13 +108,13 @@ public static class ProjectDisplayHelper
             return Result<IReadOnlyList<ProjectTotalAllocation>>.Success(calculatedTotals);
         }
 
-        var total = calculatedTotals.Sum(allocation => allocation.Amount);
-        if (total == 0m)
+        var accumulator = new ProjectTotalsAccumulator();
+        foreach (var allocation in calculatedTotals)
         {
-            return Result<IReadOnlyList<ProjectTotalAllocation>>.Success([]);
+            var b = new ProjectTotalAllocation(limaSnapshot.ProjectId, allocation.Amount, allocation.BaseSalary, allocation.Commission, allocation.GoalBonus, allocation.ManualBonus, allocation.Other);
+            accumulator.AddRange([b]);
         }
 
-        return Result<IReadOnlyList<ProjectTotalAllocation>>.Success(
-            [new ProjectTotalAllocation(limaSnapshot.ProjectId, total)]);
+        return Result<IReadOnlyList<ProjectTotalAllocation>>.Success(accumulator.ToList());
     }
 }

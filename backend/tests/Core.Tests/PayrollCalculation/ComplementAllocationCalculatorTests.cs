@@ -24,7 +24,7 @@ public class ComplementAllocationCalculatorTests
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().ContainSingle()
-            .Which.Should().BeEquivalentTo(new ProjectTotalAllocation(LimaKarttosId, 500m));
+            .Which.Should().BeEquivalentTo(new { ProjectId = LimaKarttosId, Amount = 500m });
     }
 
     [Fact]
@@ -78,7 +78,7 @@ public class ComplementAllocationCalculatorTests
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().ContainSingle()
-            .Which.Should().BeEquivalentTo(new ProjectTotalAllocation(PayingProjectId, 750m));
+            .Which.Should().BeEquivalentTo(new { ProjectId = PayingProjectId, Amount = 750m });
     }
 
     [Fact]

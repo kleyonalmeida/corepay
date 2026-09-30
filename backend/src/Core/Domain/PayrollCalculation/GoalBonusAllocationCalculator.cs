@@ -42,7 +42,7 @@ public static class GoalBonusAllocationCalculator
                     .Amount;
 
             distributed += amount;
-            results.Add(new ProjectTotalAllocation(allocation.ProjectId, amount));
+            results.Add(new ProjectTotalAllocation(allocation.ProjectId, amount, GoalBonus: amount));
         }
 
         return results;

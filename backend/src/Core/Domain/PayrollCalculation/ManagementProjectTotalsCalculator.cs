@@ -15,7 +15,7 @@ public static class ManagementProjectTotalsCalculator
         {
             foreach (var breakdown in revenueEntry.ProjectBreakdown)
             {
-                accumulator.Add(breakdown.ProjectId, breakdown.Amount);
+                accumulator.AddOther(breakdown.ProjectId, breakdown.Amount);
             }
         }
 

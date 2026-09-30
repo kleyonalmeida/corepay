@@ -55,7 +55,7 @@ public static class ComplementAllocationCalculator
         {
             return Result<IReadOnlyList<ProjectTotalAllocation>>.Success(
             [
-                new ProjectTotalAllocation(input.CommissionPayingProjectId.Value, bucketAmount)
+                new ProjectTotalAllocation(input.CommissionPayingProjectId.Value, bucketAmount, BaseSalary: bucketAmount)
             ]);
         }
 
@@ -72,7 +72,7 @@ public static class ComplementAllocationCalculator
 
         return Result<IReadOnlyList<ProjectTotalAllocation>>.Success(
         [
-            new ProjectTotalAllocation(defaultTarget.ProjectId, bucketAmount)
+            new ProjectTotalAllocation(defaultTarget.ProjectId, bucketAmount, BaseSalary: bucketAmount)
         ]);
     }
 
@@ -100,7 +100,7 @@ public static class ComplementAllocationCalculator
                     .Amount;
 
             distributed += amount;
-            results.Add(new ProjectTotalAllocation(entry.ProjectId, amount));
+            results.Add(new ProjectTotalAllocation(entry.ProjectId, amount, BaseSalary: amount));
         }
 
         return results;

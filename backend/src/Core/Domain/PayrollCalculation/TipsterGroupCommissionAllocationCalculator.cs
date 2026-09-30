@@ -49,7 +49,7 @@ public static class TipsterGroupCommissionAllocationCalculator
             var amount = perPercentShare + vipShare;
             if (amount != 0m)
             {
-                results.Add(new ProjectTotalAllocation(entry.ProjectId, amount));
+                results.Add(new ProjectTotalAllocation(entry.ProjectId, amount, Other: amount));
             }
         }
 

@@ -30,9 +30,45 @@
         </div>
     }
 
+    @if (Payload?.BonusEntries is { Count: > 0 })
+    {
+        <div class="payroll-detail-breakdown__extras" style="margin-top: 1.5rem;">
+            <h4 class="payroll-detail-breakdown__projects-title" style="margin-bottom: 0.5rem; font-size: 0.875rem; font-weight: 600; color: var(--color-text-muted);">Bônus / Extras</h4>
+            <table class="payroll-detail-breakdown__table">
+                <tbody>
+                    @foreach (var bonus in Payload.BonusEntries)
+                    {
+                        <tr>
+                            <td>@(string.IsNullOrWhiteSpace(bonus.Justification) ? "Bônus manual" : bonus.Justification)</td>
+                            <td class="tabular-nums payroll-detail-breakdown__amount-col text-table-money">@MoneyFormatter.FormatMoney(bonus.Value)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @if (Payload?.DeductionEntries is { Count: > 0 })
+    {
+        <div class="payroll-detail-breakdown__deductions" style="margin-top: 1.5rem;">
+            <h4 class="payroll-detail-breakdown__projects-title" style="margin-bottom: 0.5rem; font-size: 0.875rem; font-weight: 600; color: var(--color-text-muted);">Descontos</h4>
+            <table class="payroll-detail-breakdown__table">
+                <tbody>
+                    @foreach (var deduction in Payload.DeductionEntries)
+                    {
+                        <tr>
+                            <td>@(string.IsNullOrWhiteSpace(deduction.Description) ? "Desconto manual" : deduction.Description)</td>
+                            <td class="tabular-nums payroll-detail-breakdown__amount-col text-danger">-@MoneyFormatter.FormatMoney(deduction.Value)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
     @if (ProjectTotals is { Count: > 0 })
     {
-        <div class="payroll-detail-breakdown__projects">
+        <div class="payroll-detail-breakdown__projects" style="margin-top: 1.5rem;">
             <h4 class="payroll-detail-breakdown__projects-title">Custo por projeto</h4>
             <table class="payroll-detail-breakdown__table">
                 <thead>
@@ -44,10 +80,62 @@
                 <tbody>
                     @foreach (var total in ProjectTotals)
                     {
-                        <tr>
-                            <td>@ResolveProjectName(total.ProjectId)</td>
+                        var isExpanded = _expandedProjects.Contains(total.ProjectId);
+                        var hasBreakdown = total.BaseSalary > 0 || total.Commission > 0 || total.GoalBonus > 0 || total.ManualBonus > 0 || total.Other > 0;
+                        <tr class="payroll-detail-breakdown__project-row" style="@(hasBreakdown ? "cursor: pointer;" : "")" @onclick="() => ToggleProject(total.ProjectId, hasBreakdown)">
+                            <td style="display: flex; align-items: center; gap: 0.5rem;">
+                                @if (hasBreakdown)
+                                {
+                                    <Icon Kind="@(isExpanded ? IconKind.ChevronDown : IconKind.ChevronRight)" Size="IconSize.Sm" />
+                                }
+                                @ResolveProjectName(total.ProjectId)
+                            </td>
                             <td class="tabular-nums payroll-detail-breakdown__amount-col">@MoneyFormatter.FormatMoney(total.Amount)</td>
                         </tr>
+                        @if (isExpanded)
+                        {
+                            <tr class="payroll-detail-breakdown__sub-row">
+                                <td colspan="2" style="padding: 0; background-color: var(--color-background-muted);">
+                                    <div class="payroll-entry-totals__grid" style="padding: 0.75rem 1rem;">
+                                        @if (total.BaseSalary > 0)
+                                        {
+                                            <div>
+                                                <span class="payroll-entry-shell__label" style="font-size: 0.75rem;">Fixo/Complemento</span>
+                                                <span class="tabular-nums" style="font-size: 0.875rem;">@MoneyFormatter.FormatMoney(total.BaseSalary)</span>
+                                            </div>
+                                        }
+                                        @if (total.Commission > 0)
+                                        {
+                                            <div>
+                                                <span class="payroll-entry-shell__label" style="font-size: 0.75rem;">Comissão</span>
+                                                <span class="tabular-nums" style="font-size: 0.875rem;">@MoneyFormatter.FormatMoney(total.Commission)</span>
+                                            </div>
+                                        }
+                                        @if (total.GoalBonus > 0)
+                                        {
+                                            <div>
+                                                <span class="payroll-entry-shell__label" style="font-size: 0.75rem;">Bônus Meta</span>
+                                                <span class="tabular-nums" style="font-size: 0.875rem;">@MoneyFormatter.FormatMoney(total.GoalBonus)</span>
+                                            </div>
+                                        }
+                                        @if (total.ManualBonus > 0)
+                                        {
+                                            <div>
+                                                <span class="payroll-entry-shell__label" style="font-size: 0.75rem;">Bônus Manual</span>
+                                                <span class="tabular-nums" style="font-size: 0.875rem;">@MoneyFormatter.FormatMoney(total.ManualBonus)</span>
+                                            </div>
+                                        }
+                                        @if (total.Other > 0)
+                                        {
+                                            <div>
+                                                <span class="payroll-entry-shell__label" style="font-size: 0.75rem;">Outros</span>
+                                                <span class="tabular-nums" style="font-size: 0.875rem;">@MoneyFormatter.FormatMoney(total.Other)</span>
+                                            </div>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
                     }
                 </tbody>
             </table>
@@ -58,9 +146,22 @@
 @code {
     [Parameter] public PayrollEntryResultDto? Result { get; set; }
     [Parameter] public IReadOnlyList<PayrollProjectTotalDto>? ProjectTotals { get; set; }
+    [Parameter] public PayrollEntryPayloadDto? Payload { get; set; }
     [Parameter] public IReadOnlyDictionary<Guid, string> ProjectNames { get; set; } =
         new Dictionary<Guid, string>();
 
+    private HashSet<Guid> _expandedProjects = [];
+
     private string ResolveProjectName(Guid projectId) =>
         ProjectNames.TryGetValue(projectId, out var name) ? name : projectId.ToString();
+
+    private void ToggleProject(Guid projectId, bool hasBreakdown)
+    {
+        if (!hasBreakdown) return;
+        
+        if (!_expandedProjects.Add(projectId))
+        {
+            _expandedProjects.Remove(projectId);
+        }
+    }
 }

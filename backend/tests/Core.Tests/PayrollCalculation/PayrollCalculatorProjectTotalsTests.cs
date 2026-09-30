@@ -155,7 +155,7 @@ public class PayrollCalculatorProjectTotalsTests
 
         totalsResult.IsSuccess.Should().BeTrue();
         totalsResult.Value.Should().ContainSingle()
-            .Which.Should().BeEquivalentTo(new ProjectTotalAllocation(LimaKarttosId, 5000m));
+            .Which.Should().BeEquivalentTo(new { ProjectId = LimaKarttosId, Amount = 5000m });
     }
 
     [Fact]
@@ -246,7 +246,7 @@ public class PayrollCalculatorProjectTotalsTests
 
         projectSum.Should().Be(entryResult.Value.TotalAmount + deductions - unallocatedBonuses);
         totalsResult.Value.Should().ContainSingle()
-            .Which.Should().BeEquivalentTo(new ProjectTotalAllocation(OriginalProjectId, 1500m));
+            .Which.Should().BeEquivalentTo(new { ProjectId = OriginalProjectId, Amount = 1500m });
     }
 
     [Fact]
@@ -396,7 +396,7 @@ public class PayrollCalculatorProjectTotalsTests
 
         totalsResult.IsSuccess.Should().BeTrue();
         totalsResult.Value.Should().ContainSingle()
-            .Which.Should().BeEquivalentTo(new ProjectTotalAllocation(managementProjectId, 1750m));
+            .Which.Should().BeEquivalentTo(new { ProjectId = managementProjectId, Amount = 1750m });
     }
 
     [Fact]

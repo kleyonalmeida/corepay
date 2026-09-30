@@ -40,7 +40,8 @@ public static class ProjectLeaderProjectTotalsCalculator
                 input.Department,
                 input.GoalTier);
 
-            accumulator.Add(entry.ProjectId, fixedShare + commission);
+            accumulator.AddBaseSalary(entry.ProjectId, fixedShare);
+            accumulator.AddCommission(entry.ProjectId, commission);
         }
 
         return accumulator.ToList();

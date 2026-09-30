@@ -32,7 +32,7 @@ public static class FixedBonusSectionProjectTotalsCalculator
             fixedAllocations);
 
         var accumulator = new ProjectTotalsAccumulator();
-        accumulator.AddRange(fixedAllocations);
+        accumulator.AddRangeFixed(fixedAllocations);
         accumulator.AddRange(GoalBonusAllocationCalculator.Calculate(
             goalBonus,
             fixedAllocations,

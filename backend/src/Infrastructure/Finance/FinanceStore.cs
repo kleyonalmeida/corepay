@@ -222,7 +222,7 @@ public sealed class FinanceStore : IFinanceStore
         return Result<(PayrollEntryResultResponse?, IReadOnlyList<PayrollProjectTotalResponse>?)>.Success((
             MapEntryResult(result),
             projectTotals
-                .Select(t => new PayrollProjectTotalResponse(t.ProjectId, t.Amount))
+                .Select(t => new PayrollProjectTotalResponse(t.ProjectId, t.Amount, t.BaseSalary, t.Commission, t.GoalBonus, t.ManualBonus, t.Other))
                 .ToList()));
     }
 
@@ -284,7 +284,7 @@ public sealed class FinanceStore : IFinanceStore
         return (
             MapEntryResult(entry.Payload.CalculatedResult),
             entry.Payload.DisplayProjectTotals
-                .Select(t => new PayrollProjectTotalResponse(t.ProjectId, t.Amount))
+                .Select(t => new PayrollProjectTotalResponse(t.ProjectId, t.Amount, t.BaseSalary, t.Commission, t.GoalBonus, t.ManualBonus, t.Other))
                 .ToList());
     }
 

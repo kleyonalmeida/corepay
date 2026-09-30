@@ -62,7 +62,8 @@
                                        OnToggleNf="@(() => OnToggleNf.InvokeAsync(Entry.Id))" />
             <PayrollEntryBreakdownPanel Result="@Entry.Result"
                                         ProjectTotals="@Entry.ProjectTotals"
-                                        ProjectNames="@ProjectNames" />
+                                        ProjectNames="@ProjectNames"
+                                        Payload="@Entry.Payload" />
         </div>
     }
 </div>

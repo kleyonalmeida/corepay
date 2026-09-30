@@ -106,7 +106,14 @@ public sealed record PayrollEntryResultResponse(
     decimal GroupCommissionAmount,
     decimal PlatformTotal);
 
-public sealed record PayrollProjectTotalResponse(Guid ProjectId, decimal Amount);
+public sealed record PayrollProjectTotalResponse(
+    Guid ProjectId,
+    decimal Amount,
+    decimal BaseSalary = 0m,
+    decimal Commission = 0m,
+    decimal GoalBonus = 0m,
+    decimal ManualBonus = 0m,
+    decimal Other = 0m);
 
 public sealed record PayrollEntryPreviewResponse(
     PayrollEntryResultResponse Result,

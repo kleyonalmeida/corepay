@@ -40,11 +40,11 @@ public static class CommercialAnalystProjectTotalsCalculator
 
             if (grossCommission < SmallCommissionThreshold && input.CommissionPayingProjectId.HasValue)
             {
-                accumulator.Add(input.CommissionPayingProjectId.Value, netCost);
+                accumulator.AddCommission(input.CommissionPayingProjectId.Value, netCost);
             }
             else
             {
-                accumulator.Add(entry.ProjectId, netCost);
+                accumulator.AddCommission(entry.ProjectId, netCost);
             }
         }
 

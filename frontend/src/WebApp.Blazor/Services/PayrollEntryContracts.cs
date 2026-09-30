@@ -168,7 +168,14 @@ public sealed record PayrollEntryResultDto(
     decimal GroupCommissionAmount,
     decimal PlatformTotal);
 
-public sealed record PayrollProjectTotalDto(Guid ProjectId, decimal Amount);
+public sealed record PayrollProjectTotalDto(
+    Guid ProjectId,
+    decimal Amount,
+    decimal BaseSalary = 0m,
+    decimal Commission = 0m,
+    decimal GoalBonus = 0m,
+    decimal ManualBonus = 0m,
+    decimal Other = 0m);
 
 public sealed record PayrollEntryPreviewDto(
     PayrollEntryResultDto Result,

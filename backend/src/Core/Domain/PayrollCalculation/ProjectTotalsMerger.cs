@@ -26,7 +26,7 @@ public static class ProjectTotalsMerger
         {
             if (bonus.ProjectId.HasValue)
             {
-                accumulator.Add(bonus.ProjectId.Value, bonus.Value);
+                accumulator.AddManualBonus(bonus.ProjectId.Value, bonus.Value);
             }
         }
     }

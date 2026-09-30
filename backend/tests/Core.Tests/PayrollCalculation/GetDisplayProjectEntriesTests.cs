@@ -43,7 +43,7 @@ public class GetDisplayProjectEntriesTests
         entryResult.Value.TotalAmount.Should().Be(3550m);
 
         displayResult.Value.Should().ContainSingle()
-            .Which.Should().BeEquivalentTo(new ProjectTotalAllocation(AffiliatesProjectId, 3500m));
+            .Which.Should().BeEquivalentTo(new { ProjectId = AffiliatesProjectId, Amount = 3500m });
     }
 
     [Fact]
@@ -65,7 +65,7 @@ public class GetDisplayProjectEntriesTests
 
         displayResult.IsSuccess.Should().BeTrue();
         displayResult.Value.Should().ContainSingle()
-            .Which.Should().BeEquivalentTo(new ProjectTotalAllocation(AffiliatesProjectId, 4500m));
+            .Which.Should().BeEquivalentTo(new { ProjectId = AffiliatesProjectId, Amount = 4500m });
     }
 
     [Fact]
@@ -129,7 +129,7 @@ public class GetDisplayProjectEntriesTests
 
         displayResult.IsSuccess.Should().BeTrue();
         displayResult.Value.Should().ContainSingle()
-            .Which.Should().BeEquivalentTo(new ProjectTotalAllocation(LimaKarttosId, 5000m));
+            .Which.Should().BeEquivalentTo(new { ProjectId = LimaKarttosId, Amount = 5000m });
     }
 
     [Fact]

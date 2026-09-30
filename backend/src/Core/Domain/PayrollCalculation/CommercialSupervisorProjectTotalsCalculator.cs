@@ -24,21 +24,24 @@ public static class CommercialSupervisorProjectTotalsCalculator
             var commission = CommercialSupervisorProjectCommissionCalculator.CalculateProject(
                 entry,
                 careerLevel);
-            accumulator.Add(entry.ProjectId, commission);
+            accumulator.AddCommission(entry.ProjectId, commission);
         }
 
         var fullBase = BaseSalaryResolver.Resolve(input);
         var factor = ProportionalFactor.CalculateForEntry(input);
         var proportionalBase = Money.FromDecimal(fullBase * factor).RoundToCurrencyScale().Amount;
 
-        accumulator.AddRange(SupervisorFixedAllocationCalculator.Calculate(
+        accumulator.AddRangeFixed(SupervisorFixedAllocationCalculator.Calculate(
             proportionalBase,
             input.SupervisorProjectEntries,
             input.ProjectSnapshots));
 
-        accumulator.AddRange(SupervisorRevAnalistaAllocationCalculator.Calculate(
+        foreach (var allocation in SupervisorRevAnalistaAllocationCalculator.Calculate(
             input.SupervisorAnalystRevenue,
-            input.SupervisorProjectEntries));
+            input.SupervisorProjectEntries))
+        {
+            accumulator.AddCommission(allocation.ProjectId, allocation.Amount);
+        }
 
         return accumulator.ToList();
     }
