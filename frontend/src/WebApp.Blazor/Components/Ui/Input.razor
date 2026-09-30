@@ -1,0 +1,238 @@
+@using WebApp.Blazor.Formatting
+@implements IAsyncDisposable
+@inject IJSRuntime JSRuntime
+
+<div class="ui-field">
+    @if (!string.IsNullOrWhiteSpace(Label))
+    {
+        <label class="@LabelClass" for="@InputId">@Label</label>
+    }
+    <div class="@WrapperClass">
+        @if (IsMoney)
+        {
+            <span class="ui-input-prefix" aria-hidden="true">R$</span>
+        }
+        <input @ref="_inputRef"
+               id="@InputId"
+               class="@InputClass"
+               type="@EffectiveInputType"
+               inputmode="@InputMode"
+               placeholder="@Placeholder"
+               disabled="@Disabled"
+               value="@_displayValue"
+               @oninput="HandleInputAsync"
+               @attributes="FilteredAdditionalAttributes" />
+        @if (IsPasswordField)
+        {
+            <button type="button"
+                    class="ui-input__password-toggle"
+                    aria-label="@PasswordToggleLabel"
+                    aria-pressed="@_passwordVisible"
+                    disabled="@Disabled"
+                    @onclick="TogglePasswordVisibility">
+                <Icon Kind="@(_passwordVisible ? IconKind.EyeOff : IconKind.Eye)" />
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public bool AuthLabel { get; set; }
+    [Parameter] public string? Placeholder { get; set; }
+    [Parameter] public string Type { get; set; } = "text";
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public bool IsMoney { get; set; }
+    [Parameter] public NumericInputKind Kind { get; set; } = NumericInputKind.Text;
+    [Parameter] public int DebounceMs { get; set; }
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private ElementReference _inputRef;
+    private bool _passwordVisible;
+    private CancellationTokenSource? _debounceCts;
+    private string? _displayValue;
+    private string? _lastExternalValue;
+    private NumericInputKind? _registeredGuardKind;
+    private IJSObjectReference? _numericInputModule;
+    private IJSObjectReference? _inputGuard;
+
+    private string InputId { get; } = $"input-{Guid.NewGuid():N}";
+    private string LabelClass => AuthLabel ? "text-label-auth ui-field__label" : "text-label ui-field__label";
+    private bool IsPasswordField => string.Equals(Type, "password", StringComparison.OrdinalIgnoreCase);
+    private string EffectiveInputType => IsPasswordField ? "text" : Type;
+    private string PasswordToggleLabel => _passwordVisible ? "Ocultar senha" : "Mostrar senha";
+    private NumericInputKind EffectiveKind => IsMoney ? NumericInputKind.MoneyCents : Kind;
+    private bool HasNumericMask => EffectiveKind != NumericInputKind.Text;
+    private int EffectiveDebounceMs => HasNumericMask ? 0 : DebounceMs;
+    private string? InputMode => EffectiveKind switch
+    {
+        NumericInputKind.MoneyCents or NumericInputKind.Integer => "numeric",
+        NumericInputKind.Percent => "decimal",
+        _ => null
+    };
+
+    private string InputClass => string.Join(' ', new[]
+    {
+        "ui-input",
+        IsMoney ? "ui-input--money" : null,
+        IsPasswordField ? "ui-input--password-field" : null,
+        IsPasswordField && !_passwordVisible ? "ui-input--password-masked" : null
+    }.Where(static c => !string.IsNullOrWhiteSpace(c)));
+
+    private string WrapperClass
+    {
+        get
+        {
+            var classes = new List<string> { "ui-input-wrapper" };
+
+            if (IsMoney)
+            {
+                classes.Add("ui-input-wrapper--money");
+            }
+
+            if (IsPasswordField)
+            {
+                classes.Add("ui-input-wrapper--password");
+            }
+
+            return string.Join(' ', classes);
+        }
+    }
+
+    private Dictionary<string, object>? FilteredAdditionalAttributes
+    {
+        get
+        {
+            if (AdditionalAttributes is null || AdditionalAttributes.Count == 0)
+            {
+                return AdditionalAttributes;
+            }
+
+            return AdditionalAttributes
+                .Where(static pair =>
+                    !string.Equals(pair.Key, "inputmode", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(pair.Key, "value", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(pair.Key, "oninput", StringComparison.OrdinalIgnoreCase))
+                .ToDictionary(static pair => pair.Key, static pair => pair.Value);
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (_displayValue is null || !string.Equals(Value, _lastExternalValue, StringComparison.Ordinal))
+        {
+            _displayValue = HasNumericMask
+                ? NumericInputFormatter.NormalizeDisplay(EffectiveKind, Value)
+                : Value;
+
+            _lastExternalValue = Value;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!HasNumericMask)
+        {
+            if (_registeredGuardKind is not null)
+            {
+                await DisposeInputGuardAsync();
+            }
+
+            return;
+        }
+
+        if (_registeredGuardKind == EffectiveKind)
+        {
+            return;
+        }
+
+        await DisposeInputGuardAsync();
+
+        try
+        {
+            _numericInputModule ??= await JSRuntime.InvokeAsync<IJSObjectReference>("import", "./js/numericInput.js");
+            _inputGuard = await _numericInputModule.InvokeAsync<IJSObjectReference>(
+                "registerInputGuard",
+                _inputRef,
+                EffectiveKind.ToString());
+            _registeredGuardKind = EffectiveKind;
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+    }
+
+    private void TogglePasswordVisibility()
+    {
+        _passwordVisible = !_passwordVisible;
+    }
+
+    private async Task HandleInputAsync(ChangeEventArgs args)
+    {
+        var raw = args.Value?.ToString();
+        _displayValue = HasNumericMask
+            ? NumericInputFormatter.FormatInput(EffectiveKind, raw)
+            : raw;
+
+        _lastExternalValue = _displayValue;
+
+        if (EffectiveDebounceMs <= 0)
+        {
+            await ValueChanged.InvokeAsync(_displayValue);
+            return;
+        }
+
+        _debounceCts?.Cancel();
+        _debounceCts?.Dispose();
+        _debounceCts = new CancellationTokenSource();
+        var token = _debounceCts.Token;
+
+        try
+        {
+            await Task.Delay(EffectiveDebounceMs, token);
+            await InvokeAsync(async () => await ValueChanged.InvokeAsync(_displayValue));
+        }
+        catch (TaskCanceledException)
+        {
+        }
+    }
+
+    private async Task DisposeInputGuardAsync()
+    {
+        if (_inputGuard is not null)
+        {
+            try
+            {
+                await _inputGuard.InvokeVoidAsync("dispose");
+                await _inputGuard.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+
+            _inputGuard = null;
+        }
+
+        _registeredGuardKind = null;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _debounceCts?.Cancel();
+        _debounceCts?.Dispose();
+        await DisposeInputGuardAsync();
+
+        if (_numericInputModule is not null)
+        {
+            await _numericInputModule.DisposeAsync();
+        }
+    }
+}

@@ -1,0 +1,212 @@
+@using WebApp.Blazor.Formatting
+@inject ICashflowApiService CashflowApiService
+
+<div class="cashflow-report">
+    <Card Class="cashflow-filters-card">
+        <ChildContent>
+            <div class="cashflow-filters">
+                <Select Label="Mês"
+                        Value="@_monthFilter"
+                        ValueChanged="@OnMonthFilterChangedAsync">
+                    @for (var month = 1; month <= 12; month++)
+                    {
+                        <option value="@month">@CompetenceFormatter.Format(month, 2000).Split('/')[0]</option>
+                    }
+                </Select>
+                <Select Label="Ano"
+                        Value="@_yearFilter"
+                        ValueChanged="@OnYearFilterChangedAsync">
+                    @foreach (var year in _yearOptions)
+                    {
+                        <option value="@year">@year</option>
+                    }
+                </Select>
+            </div>
+        </ChildContent>
+    </Card>
+
+    @if (_isLoading)
+    {
+        <div class="settings-section__loading">
+            <Spinner Label="Carregando relatório..." />
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(_loadError))
+    {
+        <EmptyState Title="Erro ao carregar relatório" Description="@_loadError" />
+    }
+    else
+    {
+        <div class="cashflow-stats-grid">
+            <StatCard Label="Entradas"
+                      Value="@_summary.TotalEntradas"
+                      Tone="SemanticTone.Emerald" />
+            <StatCard Label="Saídas"
+                      Value="@_summary.TotalSaidas"
+                      Tone="SemanticTone.Red" />
+            <StatCard Label="Saldo"
+                      Value="@_summary.Saldo"
+                      Tone="@(_summary.Saldo >= 0 ? SemanticTone.Emerald : SemanticTone.Red)" />
+            <StatCard Label="Lançamentos"
+                      ValueText="@_summary.Count.ToString()"
+                      Tone="SemanticTone.Blue" />
+        </div>
+
+        <div class="cashflow-report-grid">
+            <Card Class="cashflow-table-card">
+                <HeaderContent>
+                    <SectionCardHeader Title="Por projeto" Icon="IconKind.Building2" />
+                </HeaderContent>
+                <ChildContent>
+                    @if (_byProject.Count == 0)
+                    {
+                        <EmptyState Title="Nenhum lançamento no período"
+                                    Description="Ajuste os filtros ou cadastre lançamentos na aba Lançamentos." />
+                    }
+                    else
+                    {
+                        <div class="settings-table-wrapper">
+                            <table class="settings-table cashflow-table cashflow-report-table">
+                                <thead>
+                                    <tr>
+                                        <th>Projeto</th>
+                                        <th class="cashflow-table__money">Entradas</th>
+                                        <th class="cashflow-table__money">Saídas</th>
+                                        <th class="cashflow-table__money">Saldo</th>
+                                        <th class="cashflow-report-table__count">Lanç.</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var row in _byProject)
+                                    {
+                                        <tr>
+                                            <td>@row.ProjectName</td>
+                                            <td class="cashflow-table__money text-table-money tabular-nums cashflow-table__entrada">
+                                                @MoneyFormatter.FormatMoney(row.TotalEntradas)
+                                            </td>
+                                            <td class="cashflow-table__money text-table-money tabular-nums cashflow-table__saida">
+                                                @MoneyFormatter.FormatMoney(row.TotalSaidas)
+                                            </td>
+                                            <td class="cashflow-table__money text-table-money tabular-nums @(row.Saldo >= 0 ? "cashflow-table__entrada" : "cashflow-table__saida")">
+                                                @MoneyFormatter.FormatMoney(row.Saldo)
+                                            </td>
+                                            <td class="cashflow-report-table__count tabular-nums">@row.Count</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </ChildContent>
+            </Card>
+
+            <Card Class="cashflow-table-card">
+                <HeaderContent>
+                    <SectionCardHeader Title="Por forma de pagamento" Icon="IconKind.Wallet" />
+                </HeaderContent>
+                <ChildContent>
+                    @if (_byPaymentMethod.Count == 0)
+                    {
+                        <EmptyState Title="Nenhuma saída no período"
+                                    Description="Saídas com forma de pagamento aparecem nesta tabela." />
+                    }
+                    else
+                    {
+                        <div class="settings-table-wrapper">
+                            <table class="settings-table cashflow-table cashflow-report-table">
+                                <thead>
+                                    <tr>
+                                        <th>Forma de pagamento</th>
+                                        <th class="cashflow-table__money">Saídas</th>
+                                        <th class="cashflow-report-table__count">Lanç.</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var row in _byPaymentMethod)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <PaymentMethodChip Name="@row.PaymentMethodName" />
+                                            </td>
+                                            <td class="cashflow-table__money text-table-money tabular-nums cashflow-table__saida">
+                                                @MoneyFormatter.FormatMoney(row.TotalSaidas)
+                                            </td>
+                                            <td class="cashflow-report-table__count tabular-nums">@row.Count</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </ChildContent>
+            </Card>
+        </div>
+    }
+</div>
+
+@code {
+    private readonly List<CashflowReportProjectRowDto> _byProject = [];
+    private readonly List<CashflowReportPaymentMethodRowDto> _byPaymentMethod = [];
+    private readonly int[] _yearOptions = BuildYearOptions();
+
+    private CashflowSummaryDto _summary = new(0, 0, 0, 0);
+    private bool _isLoading = true;
+    private string? _loadError;
+    private string _monthFilter = string.Empty;
+    private string _yearFilter = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var (month, year) = PayrollCompetenceDefaults.CurrentCompetence();
+        _monthFilter = month.ToString();
+        _yearFilter = year.ToString();
+        await LoadReportAsync();
+    }
+
+    private static int[] BuildYearOptions()
+    {
+        var currentYear = PayrollCompetenceDefaults.CurrentCompetence().Year;
+        return Enumerable.Range(currentYear - 2, 5).Reverse().ToArray();
+    }
+
+    private async Task LoadReportAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+        _byProject.Clear();
+        _byPaymentMethod.Clear();
+
+        if (!int.TryParse(_monthFilter, out var month) || !int.TryParse(_yearFilter, out var year))
+        {
+            _loadError = "Selecione mês e ano válidos.";
+            _isLoading = false;
+            return;
+        }
+
+        var result = await CashflowApiService.GetReportAsync(new CashflowReportQuery(month, year));
+        if (result.Status == CashflowApiStatus.Success && result.Data is not null)
+        {
+            _summary = result.Data.Summary;
+            _byProject.AddRange(result.Data.ByProject);
+            _byPaymentMethod.AddRange(result.Data.ByPaymentMethod);
+        }
+        else
+        {
+            _loadError = CashflowErrorMessages.ForReport(result);
+        }
+
+        _isLoading = false;
+    }
+
+    private async Task OnMonthFilterChangedAsync(string? value)
+    {
+        _monthFilter = value ?? string.Empty;
+        await LoadReportAsync();
+    }
+
+    private async Task OnYearFilterChangedAsync(string? value)
+    {
+        _yearFilter = value ?? string.Empty;
+        await LoadReportAsync();
+    }
+}

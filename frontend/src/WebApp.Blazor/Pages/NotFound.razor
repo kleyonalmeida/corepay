@@ -1,0 +1,25 @@
+﻿@page "/not-found"
+@layout MainLayout
+
+<PageTitle>Página não encontrada — CorePay</PageTitle>
+
+<EmptyState Title="Página não encontrada"
+            Description="O endereço acessado não existe ou foi movido.">
+    <IconContent>
+        <Icon Kind="IconKind.Search" Size="IconSize.EmptyState" />
+    </IconContent>
+</EmptyState>
+
+<div class="not-found__actions">
+    <Button Variant="ButtonVariant.Outline" OnClick="NavigateHomeAsync">Voltar ao dashboard</Button>
+</div>
+
+@code {
+    [Inject] private NavigationManager NavigationManager { get; set; } = default!;
+
+    private Task NavigateHomeAsync(MouseEventArgs _)
+    {
+        NavigationManager.NavigateTo("/");
+        return Task.CompletedTask;
+    }
+}

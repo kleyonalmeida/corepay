@@ -1,0 +1,45 @@
+<div class="payroll-entry-shell">
+    <div class="collaborators-table__identity">
+        <Avatar Name="@Entry.CollaboratorName" Size="AvatarSize.Sm" />
+        <div>
+            <p class="collaborators-table__name">@Entry.CollaboratorName</p>
+            <p class="collaborators-table__job-title">@(Entry.CareerLevelName ?? "—")</p>
+        </div>
+    </div>
+
+    <div class="payroll-entry-shell__meta">
+        <div>
+            <span class="payroll-entry-shell__label">Admissão</span>
+            <span>@DateFormatter.FormatDate(Entry.AdmissionDate)</span>
+        </div>
+        <div>
+            <span class="payroll-entry-shell__label">PIX</span>
+            <span class="text-pix-key">@(Entry.PixKey ?? "—")</span>
+        </div>
+        <div>
+            <span class="payroll-entry-shell__label">Salário base</span>
+            <span class="tabular-nums">@MoneyFormatter.FormatMoney(Entry.FullBaseSalary ?? 0m)</span>
+        </div>
+        <div>
+            <span class="payroll-entry-shell__label">Perfil</span>
+            <span>@CalculationProfileLabels.GetLabel(Entry.CalculationProfile)</span>
+        </div>
+    </div>
+
+    @if (CanRemove)
+    {
+        <Button Variant="ButtonVariant.Ghost"
+                Size="ButtonSize.Sm"
+                Disabled="@IsBusy"
+                OnClick="@(() => OnRemove.InvokeAsync(Entry))">
+            Remover
+        </Button>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PayrollEntryShellDto Entry { get; set; } = default!;
+    [Parameter] public bool CanRemove { get; set; } = true;
+    [Parameter] public bool IsBusy { get; set; }
+    [Parameter] public EventCallback<PayrollEntryShellDto> OnRemove { get; set; }
+}

@@ -1,0 +1,97 @@
+@page "/dev/typography"
+@using WebApp.Blazor.Formatting
+
+<PageTitle>Tipografia — CorePay</PageTitle>
+
+<div class="typography-page">
+    <header class="typography-header">
+        <div>
+            <h1 class="text-page-title">Tipografia e números</h1>
+            <p class="text-page-subtitle">Escala §3 + formatação BRL (Fase 1.2)</p>
+        </div>
+        <ThemeToggle />
+    </header>
+
+    <section class="typography-section">
+        <h2 class="text-card-title typography-section__title">Critério de pronto</h2>
+        <article class="typography-proof">
+            <h3 class="text-page-title" data-typography="page-title">Folha Jan/2026</h3>
+            <p class="text-label" data-typography="label">Total a pagar</p>
+            <p class="text-stat-value tabular-nums" data-typography="stat-value">@MoneyFormatter.FormatMoney(1234.56m)</p>
+        </article>
+    </section>
+
+    <section class="typography-section">
+        <h2 class="text-card-title typography-section__title">Escala completa</h2>
+        <div class="typography-grid">
+            <div class="typography-sample">
+                <span class="text-page-title">Título de página</span>
+                <span class="typography-sample__meta">24px / 700 — text-page-title</span>
+            </div>
+            <div class="typography-sample">
+                <span class="text-page-subtitle">Subtítulo de página</span>
+                <span class="typography-sample__meta">14px / 400 muted — text-page-subtitle</span>
+            </div>
+            <div class="typography-sample">
+                <span class="text-card-title">Título de card/seção</span>
+                <span class="typography-sample__meta">16px / 600 — text-card-title</span>
+            </div>
+            <div class="typography-sample">
+                <span class="text-topbar-title">Título da topbar</span>
+                <span class="typography-sample__meta">14px / 600 @@ 60% — text-topbar-title</span>
+            </div>
+            <div class="typography-sample">
+                <span class="text-brand">CorePay</span>
+                <span class="typography-sample__meta">14px / 700 tracking — text-brand</span>
+            </div>
+            <div class="typography-sample">
+                <span class="text-sidebar-tagline">Gestão de Pagamentos</span>
+                <span class="typography-sample__meta">12px / 400 sidebar — text-sidebar-tagline</span>
+            </div>
+            <div class="typography-sample">
+                <span class="text-nav-item">Item de navegação</span>
+                <span class="typography-sample__meta">14px / 500 — text-nav-item</span>
+            </div>
+            <div class="typography-sample">
+                <span class="text-body">Corpo / tabela</span>
+                <span class="typography-sample__meta">14px / 400 — text-body</span>
+            </div>
+            <div class="typography-sample">
+                <span class="text-label">Label de campo</span>
+                <span class="typography-sample__meta">12px / 400 muted — text-label</span>
+            </div>
+            <div class="typography-sample">
+                <span class="text-label-auth">Label auth</span>
+                <span class="typography-sample__meta">14px / 500 — text-label-auth</span>
+            </div>
+            <div class="typography-sample">
+                <span class="text-badge">Chip / badge</span>
+                <span class="typography-sample__meta">12px / 600 — text-badge</span>
+            </div>
+            <div class="typography-sample">
+                <span class="text-stat-value tabular-nums">@MoneyFormatter.FormatMoney(98765.43m)</span>
+                <span class="typography-sample__meta">20px / 700 tabular — text-stat-value</span>
+            </div>
+            <div class="typography-sample typography-sample--right">
+                <span class="text-table-money">@MoneyFormatter.FormatMoney(5432.10m)</span>
+                <span class="typography-sample__meta">14px / 600 tabular direita — text-table-money</span>
+            </div>
+            <div class="typography-sample">
+                <span class="text-micro">Micro (CPA rows)</span>
+                <span class="typography-sample__meta">11px / 400 — text-micro</span>
+            </div>
+            <div class="typography-sample">
+                <span class="text-auth-title">Entrar</span>
+                <span class="typography-sample__meta">30px / 700 — text-auth-title</span>
+            </div>
+            <div class="typography-sample">
+                <span class="text-empty-title">Nenhum registro</span>
+                <span class="typography-sample__meta">18px / 500 — text-empty-title</span>
+            </div>
+            <div class="typography-sample">
+                <span class="text-pix-key">12345678901</span>
+                <span class="typography-sample__meta">12px mono — text-pix-key</span>
+            </div>
+        </div>
+    </section>
+</div>

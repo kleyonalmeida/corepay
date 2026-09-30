@@ -1,0 +1,59 @@
+@inject SidebarState SidebarState
+@implements IDisposable
+
+<button type="button"
+        class="sidebar-trigger sidebar-trigger--desktop"
+        aria-label="@DesktopAriaLabel"
+        aria-expanded="@(!SidebarState.IsDesktopCollapsed)"
+        @onclick="ToggleDesktopAsync">
+    <Icon Kind="@DesktopIcon" Size="IconSize.Topbar" />
+</button>
+
+<button type="button"
+        class="sidebar-trigger sidebar-trigger--mobile"
+        aria-label="@MobileAriaLabel"
+        aria-expanded="@SidebarState.IsMobileOpen"
+        @onclick="ToggleMobileAsync">
+    <Icon Kind="@MobileIcon" Size="IconSize.Topbar" />
+</button>
+
+@code {
+    protected override void OnInitialized()
+    {
+        SidebarState.StateChanged += HandleSidebarStateChanged;
+    }
+
+    private IconKind DesktopIcon =>
+        SidebarState.IsDesktopCollapsed ? IconKind.PanelLeftOpen : IconKind.PanelLeftClose;
+
+    private IconKind MobileIcon =>
+        SidebarState.IsMobileOpen ? IconKind.PanelLeftClose : IconKind.PanelLeftOpen;
+
+    private string DesktopAriaLabel =>
+        SidebarState.IsDesktopCollapsed ? "Expandir menu lateral" : "Recolher menu lateral";
+
+    private string MobileAriaLabel =>
+        SidebarState.IsMobileOpen ? "Fechar menu" : "Abrir menu";
+
+    private void HandleSidebarStateChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private Task ToggleDesktopAsync()
+    {
+        SidebarState.ToggleDesktopCollapse();
+        return Task.CompletedTask;
+    }
+
+    private Task ToggleMobileAsync()
+    {
+        SidebarState.ToggleMobileDrawer();
+        return Task.CompletedTask;
+    }
+
+    public void Dispose()
+    {
+        SidebarState.StateChanged -= HandleSidebarStateChanged;
+    }
+}

@@ -1,0 +1,807 @@
+<Dialog IsOpen="@IsOpen" IsOpenChanged="@IsOpenChanged" Title="@DialogTitle" IsWide="true">
+    <div class="settings-form">
+        @if (!string.IsNullOrWhiteSpace(DisplayError))
+        {
+            <p class="settings-form__error" role="alert">@DisplayError</p>
+        }
+
+        <Input Label="Nome"
+               Placeholder="Nome do nível"
+               Value="@_name"
+               ValueChanged="@(value => _name = value ?? string.Empty)" />
+
+        <Select Label="Setor"
+                Value="@_departmentValue"
+                ValueChanged="@OnDepartmentChangedAsync">
+            <option value="">Geral (sem setor)</option>
+            @foreach (var department in Departments)
+            {
+                <option value="@department.Id">@department.Name</option>
+            }
+        </Select>
+
+        <Select Label="Perfil de cálculo"
+                Value="@_profileValue"
+                ValueChanged="@OnProfileChangedAsync">
+            @foreach (var profile in CalculationProfileLabels.AllProfiles)
+            {
+                <option value="@profile.ToString()">@CalculationProfileLabels.GetLabel(profile)</option>
+            }
+        </Select>
+
+        <div class="settings-form__toggles">
+            <GoalToggle Label="Ativo" Value="@_isActive" ValueChanged="@(value => _isActive = value)" />
+        </div>
+
+        <fieldset class="settings-form__fieldset">
+            <legend class="settings-form__legend">Campos comuns</legend>
+
+            <Input Label="Salário / mínimo garantido"
+                   IsMoney="true"
+                   Placeholder="0,00"
+                   Value="@_baseSalary"
+                   ValueChanged="@(value => _baseSalary = value ?? string.Empty)" />
+
+            <Input Label="% comissão sem meta"
+                   Kind="NumericInputKind.Percent"
+                   Placeholder="0"
+                   Value="@_commissionWithoutGoalPct"
+                   ValueChanged="@(value => _commissionWithoutGoalPct = value ?? string.Empty)" />
+
+            <Input Label="% comissão com meta"
+                   Kind="NumericInputKind.Percent"
+                   Placeholder="0"
+                   Value="@_commissionWithGoalPct"
+                   ValueChanged="@(value => _commissionWithGoalPct = value ?? string.Empty)" />
+
+            <Input Label="% comissão com super meta"
+                   Kind="NumericInputKind.Percent"
+                   Placeholder="0"
+                   Value="@_commissionWithSuperGoalPct"
+                   ValueChanged="@(value => _commissionWithSuperGoalPct = value ?? string.Empty)" />
+
+            <Input Label="R$/1% grupo"
+                   IsMoney="true"
+                   Placeholder="0,00"
+                   Value="@_groupCommissionPerPercent"
+                   ValueChanged="@(value => _groupCommissionPerPercent = value ?? string.Empty)" />
+
+            <Input Label="R$/20% VIP"
+                   IsMoney="true"
+                   Placeholder="0,00"
+                   Value="@_groupCommissionPer20Percent"
+                   ValueChanged="@(value => _groupCommissionPer20Percent = value ?? string.Empty)" />
+
+            <Input Label="R$/CPA padrão"
+                   IsMoney="true"
+                   Placeholder="0,00"
+                   Value="@_defaultCpaValue"
+                   ValueChanged="@(value => _defaultCpaValue = value ?? string.Empty)" />
+
+            <Input Label="Bônus de meta (R$)"
+                   IsMoney="true"
+                   Placeholder="0,00"
+                   Value="@_goalBonusValue"
+                   ValueChanged="@(value => _goalBonusValue = value ?? string.Empty)" />
+        </fieldset>
+
+        @if (_currentProfile == CalculationProfile.CommercialAnalyst)
+        {
+            <fieldset class="settings-form__fieldset">
+                <legend class="settings-form__legend">Analista comercial — FTD e vendas</legend>
+
+                <Input Label="Taxa FTD base (R$)"
+                       IsMoney="true"
+                       Placeholder="2,00"
+                       Value="@_ftdRateBase"
+                       ValueChanged="@(value => _ftdRateBase = value ?? string.Empty)" />
+
+                <Input Label="Taxa FTD com meta (R$)"
+                       IsMoney="true"
+                       Placeholder="2,50"
+                       Value="@_ftdRateWithGoal"
+                       ValueChanged="@(value => _ftdRateWithGoal = value ?? string.Empty)" />
+
+                <Input Label="Taxa FTD com super meta (R$)"
+                       IsMoney="true"
+                       Placeholder="3,00"
+                       Value="@_ftdRateWithSuperGoal"
+                       ValueChanged="@(value => _ftdRateWithSuperGoal = value ?? string.Empty)" />
+
+                <Input Label="Taxa FTD Superbet (R$)"
+                       IsMoney="true"
+                       Placeholder="5,00"
+                       Value="@_ftdSuperbetRate"
+                       ValueChanged="@(value => _ftdSuperbetRate = value ?? string.Empty)" />
+
+                <Input Label="Bônus FTD a cada (quantidade)"
+                       Kind="NumericInputKind.Integer"
+                       Placeholder="250"
+                       Value="@_ftdBonusEvery"
+                       ValueChanged="@(value => _ftdBonusEvery = value ?? string.Empty)" />
+
+                <Input Label="Bônus FTD valor (R$)"
+                       IsMoney="true"
+                       Placeholder="350,00"
+                       Value="@_ftdBonusValue"
+                       ValueChanged="@(value => _ftdBonusValue = value ?? string.Empty)" />
+
+                <Input Label="% vendas base"
+                       Kind="NumericInputKind.Percent"
+                       Placeholder="4"
+                       Value="@_salesPctBase"
+                       ValueChanged="@(value => _salesPctBase = value ?? string.Empty)" />
+
+                <Input Label="% vendas com meta"
+                       Kind="NumericInputKind.Percent"
+                       Placeholder="5"
+                       Value="@_salesPctWithGoal"
+                       ValueChanged="@(value => _salesPctWithGoal = value ?? string.Empty)" />
+
+                <Input Label="% vendas com super meta"
+                       Kind="NumericInputKind.Percent"
+                       Placeholder="6"
+                       Value="@_salesPctWithSuperGoal"
+                       ValueChanged="@(value => _salesPctWithSuperGoal = value ?? string.Empty)" />
+
+                <Input Label="Bônus vendas a cada (R$)"
+                       IsMoney="true"
+                       Placeholder="20.000,00"
+                       Value="@_salesBonusEvery"
+                       ValueChanged="@(value => _salesBonusEvery = value ?? string.Empty)" />
+
+                <Input Label="Bônus vendas valor (R$)"
+                       IsMoney="true"
+                       Placeholder="250,00"
+                       Value="@_salesBonusValue"
+                       ValueChanged="@(value => _salesBonusValue = value ?? string.Empty)" />
+
+                <Input Label="% Rev"
+                       Kind="NumericInputKind.Percent"
+                       Placeholder="1"
+                       Value="@_revPct"
+                       ValueChanged="@(value => _revPct = value ?? string.Empty)" />
+
+                <Input Label="Betano interna (R$)"
+                       IsMoney="true"
+                       Placeholder="200,00"
+                       Value="@_betanoInternaValue"
+                       ValueChanged="@(value => _betanoInternaValue = value ?? string.Empty)" />
+
+                <Input Label="Betano MundoBet (R$)"
+                       IsMoney="true"
+                       Placeholder="70,00"
+                       Value="@_betanoMundoBetValue"
+                       ValueChanged="@(value => _betanoMundoBetValue = value ?? string.Empty)" />
+            </fieldset>
+        }
+
+        @if (_currentProfile == CalculationProfile.CommercialSupervisor)
+        {
+            <fieldset class="settings-form__fieldset">
+                <legend class="settings-form__legend">Supervisor comercial</legend>
+
+                <Input Label="FTD Superbet sem meta (R$)"
+                       IsMoney="true"
+                       Placeholder="4,00"
+                       Value="@_supFtdSuperbetNoGoal"
+                       ValueChanged="@(value => _supFtdSuperbetNoGoal = value ?? string.Empty)" />
+
+                <Input Label="FTD Superbet com meta (R$)"
+                       IsMoney="true"
+                       Placeholder="5,00"
+                       Value="@_supFtdSuperbetWithGoal"
+                       ValueChanged="@(value => _supFtdSuperbetWithGoal = value ?? string.Empty)" />
+
+                <Input Label="FTD outros sem meta (R$)"
+                       IsMoney="true"
+                       Placeholder="0,30"
+                       Value="@_supFtdOtherNoGoal"
+                       ValueChanged="@(value => _supFtdOtherNoGoal = value ?? string.Empty)" />
+
+                <Input Label="FTD outros com meta (R$)"
+                       IsMoney="true"
+                       Placeholder="0,50"
+                       Value="@_supFtdOtherWithGoal"
+                       ValueChanged="@(value => _supFtdOtherWithGoal = value ?? string.Empty)" />
+
+                <Input Label="% vendas sem meta"
+                       Kind="NumericInputKind.Percent"
+                       Placeholder="0,5"
+                       Value="@_supSalesPctNoGoal"
+                       ValueChanged="@(value => _supSalesPctNoGoal = value ?? string.Empty)" />
+
+                <Input Label="% vendas com meta"
+                       Kind="NumericInputKind.Percent"
+                       Placeholder="0,8"
+                       Value="@_supSalesPctWithGoal"
+                       ValueChanged="@(value => _supSalesPctWithGoal = value ?? string.Empty)" />
+
+                <Input Label="% Rev dos analistas"
+                       Kind="NumericInputKind.Percent"
+                       Placeholder="10"
+                       Value="@_supRevPct"
+                       ValueChanged="@(value => _supRevPct = value ?? string.Empty)" />
+            </fieldset>
+        }
+
+        @if (_currentProfile == CalculationProfile.Management)
+        {
+            <fieldset class="settings-form__fieldset">
+                <legend class="settings-form__legend">Gerência</legend>
+
+                <Input Label="Fator de receita líquida (50 = gerente, 100 = diretora)"
+                       Kind="NumericInputKind.Integer"
+                       Placeholder="50"
+                       Value="@_netRevenueFactor"
+                       ValueChanged="@(value => _netRevenueFactor = value ?? string.Empty)" />
+
+                <Input Label="% receita líquida sem meta (ex.: 1,2 = 1,2%)"
+                       Kind="NumericInputKind.Percent"
+                       Placeholder="1,2"
+                       Value="@_netRevenuePctNoGoal"
+                       ValueChanged="@(value => _netRevenuePctNoGoal = value ?? string.Empty)" />
+
+                <Input Label="% receita líquida com meta (ex.: 1,5 = 1,5%)"
+                       Kind="NumericInputKind.Percent"
+                       Placeholder="1,5"
+                       Value="@_netRevenuePctWithGoal"
+                       ValueChanged="@(value => _netRevenuePctWithGoal = value ?? string.Empty)" />
+            </fieldset>
+        }
+
+        @if (_currentProfile == CalculationProfile.PaidTraffic)
+        {
+            <fieldset class="settings-form__fieldset">
+                <legend class="settings-form__legend">Tráfego pago</legend>
+
+                <Input Label="% comissão sobre investimento"
+                       Kind="NumericInputKind.Percent"
+                       Placeholder="0"
+                       Value="@_trafficInvestmentCommissionPct"
+                       ValueChanged="@(value => _trafficInvestmentCommissionPct = value ?? string.Empty)" />
+
+                @foreach (var house in TrafficHouseLabels.All)
+                {
+                    <Input Label="@($"CPA {house.Label} (R$)")"
+                           IsMoney="true"
+                           Placeholder="0,00"
+                           Value="@GetTrafficCpaValue(house.Key)"
+                           ValueChanged="@(value => SetTrafficCpaValue(house.Key, value))" />
+                }
+
+                <p class="settings-form__hint">
+                    Campos de supervisor de tráfego abaixo são cadastrados para paridade, mas
+                    <strong>não entram no cálculo automático</strong>.
+                </p>
+
+                <Input Label="Bônus supervisor tráfego (R$)"
+                       IsMoney="true"
+                       Placeholder="0,00"
+                       Value="@_trafficSupBonus"
+                       ValueChanged="@(value => _trafficSupBonus = value ?? string.Empty)" />
+
+                <Input Label="% comissão supervisor tráfego"
+                       Placeholder="0"
+                       Value="@_trafficSupCommissionPct"
+                       ValueChanged="@(value => _trafficSupCommissionPct = value ?? string.Empty)" />
+            </fieldset>
+        }
+
+        <FormDialogActions IsSaving="@IsSaving"
+                           SubmitLabel="@(IsSaving ? "Salvando..." : "Salvar")"
+                           OnSubmit="@SubmitAsync"
+                           OnCancel="@CancelAsync" />
+    </div>
+</Dialog>
+
+@code {
+    private const string GeneralDepartmentValue = "";
+
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+    [Parameter] public CareerLevelDto? EditTarget { get; set; }
+    [Parameter] public IReadOnlyList<DepartmentDto> Departments { get; set; } = [];
+    [Parameter] public bool IsSaving { get; set; }
+    [Parameter] public string? ErrorMessage { get; set; }
+    [Parameter] public EventCallback<CareerLevelRequest> OnSubmit { get; set; }
+
+    private string _name = string.Empty;
+    private string _departmentValue = GeneralDepartmentValue;
+    private string _profileValue = CalculationProfile.CommercialAnalyst.ToString();
+    private bool _isActive = true;
+    private bool _profileManuallyChanged;
+    private string? _localError;
+
+    private string _baseSalary = "0";
+    private string _commissionWithoutGoalPct = "0";
+    private string _commissionWithGoalPct = "0";
+    private string _commissionWithSuperGoalPct = "0";
+    private string _groupCommissionPerPercent = "0";
+    private string _groupCommissionPer20Percent = "0";
+    private string _defaultCpaValue = "0";
+    private string _goalBonusValue = "0";
+
+    private string _ftdRateBase = "2";
+    private string _ftdRateWithGoal = "2,5";
+    private string _ftdRateWithSuperGoal = "3";
+    private string _ftdSuperbetRate = "5";
+    private string _ftdBonusEvery = "250";
+    private string _ftdBonusValue = "350";
+    private string _salesPctBase = "4";
+    private string _salesPctWithGoal = "5";
+    private string _salesPctWithSuperGoal = "6";
+    private string _salesBonusEvery = "20.000";
+    private string _salesBonusValue = "250";
+    private string _revPct = "1";
+    private string _betanoInternaValue = "200";
+    private string _betanoMundoBetValue = "70";
+
+    private string _supFtdSuperbetNoGoal = "4";
+    private string _supFtdSuperbetWithGoal = "5";
+    private string _supFtdOtherNoGoal = "0,3";
+    private string _supFtdOtherWithGoal = "0,5";
+    private string _supSalesPctNoGoal = "0,5";
+    private string _supSalesPctWithGoal = "0,8";
+    private string _supRevPct = "10";
+
+    private string _netRevenueFactor = "50";
+    private string _netRevenuePctNoGoal = "1,2";
+    private string _netRevenuePctWithGoal = "1,5";
+
+    private string _trafficInvestmentCommissionPct = "0";
+    private string _trafficCpaEsportiva = "0";
+    private string _trafficCpaStake = "0";
+    private string _trafficCpaBetano = "0";
+    private string _trafficCpaBetMgm = "0";
+    private string _trafficCpaNovibet = "0";
+    private string _trafficCpaBetFair = "0";
+    private string _trafficCpaBlaze = "0";
+    private string _trafficCpaSuperbet = "0";
+    private string _trafficCpaHiperbet = "0";
+    private string _trafficSupBonus = "0";
+    private string _trafficSupCommissionPct = "0";
+
+    private CalculationProfile _currentProfile => Enum.TryParse<CalculationProfile>(_profileValue, out var profile)
+        ? profile
+        : CalculationProfile.CommercialAnalyst;
+
+    private string DialogTitle => EditTarget is null ? "Novo nível" : "Editar nível";
+    private string? DisplayError => _localError ?? ErrorMessage;
+
+    protected override void OnParametersSet()
+    {
+        if (!IsOpen)
+        {
+            return;
+        }
+
+        _localError = null;
+
+        if (EditTarget is null)
+        {
+            ResetForCreate();
+            return;
+        }
+
+        LoadFromEditTarget(EditTarget);
+    }
+
+    private void ResetForCreate()
+    {
+        _name = string.Empty;
+        _departmentValue = GeneralDepartmentValue;
+        _profileValue = CalculationProfile.CommercialAnalyst.ToString();
+        _profileManuallyChanged = false;
+        _isActive = true;
+        _baseSalary = DecimalInputParser.FormatMoneyInput(1500m);
+        _commissionWithoutGoalPct = "0";
+        _commissionWithGoalPct = "0";
+        _commissionWithSuperGoalPct = "0";
+        _groupCommissionPerPercent = "0";
+        _groupCommissionPer20Percent = "0";
+        _defaultCpaValue = "0";
+        _goalBonusValue = "0";
+        _ftdRateBase = "2";
+        _ftdRateWithGoal = "2,5";
+        _ftdRateWithSuperGoal = "3";
+        _ftdSuperbetRate = "5";
+        _ftdBonusEvery = "250";
+        _ftdBonusValue = "350";
+        _salesPctBase = "4";
+        _salesPctWithGoal = "5";
+        _salesPctWithSuperGoal = "6";
+        _salesBonusEvery = DecimalInputParser.FormatMoneyInput(20_000m);
+        _salesBonusValue = "250";
+        _revPct = "1";
+        _betanoInternaValue = "200";
+        _betanoMundoBetValue = "70";
+        ResetSupervisorDefaults();
+        ResetManagementDefaults();
+        ResetTrafficDefaults();
+    }
+
+    private void LoadFromEditTarget(CareerLevelDto target)
+    {
+        _name = target.Name;
+        _departmentValue = target.DepartmentId?.ToString() ?? GeneralDepartmentValue;
+        _profileValue = target.Profile.ToString();
+        _profileManuallyChanged = true;
+        _isActive = target.IsActive;
+        _baseSalary = DecimalInputParser.FormatMoneyInput(target.BaseSalary);
+        _commissionWithoutGoalPct = DecimalInputParser.FormatDecimal(target.CommissionWithoutGoalPct);
+        _commissionWithGoalPct = DecimalInputParser.FormatDecimal(target.CommissionWithGoalPct);
+        _commissionWithSuperGoalPct = DecimalInputParser.FormatDecimal(target.CommissionWithSuperGoalPct);
+        _groupCommissionPerPercent = DecimalInputParser.FormatMoneyInput(target.GroupCommissionPerPercent);
+        _groupCommissionPer20Percent = DecimalInputParser.FormatMoneyInput(target.GroupCommissionPer20Percent);
+        _defaultCpaValue = DecimalInputParser.FormatMoneyInput(target.DefaultCpaValue);
+        _goalBonusValue = DecimalInputParser.FormatMoneyInput(target.GoalBonusValue);
+        _ftdRateBase = DecimalInputParser.FormatDecimal(target.FtdRateBase);
+        _ftdRateWithGoal = DecimalInputParser.FormatDecimal(target.FtdRateWithGoal);
+        _ftdRateWithSuperGoal = DecimalInputParser.FormatDecimal(target.FtdRateWithSuperGoal);
+        _ftdSuperbetRate = DecimalInputParser.FormatDecimal(target.FtdSuperbetRate);
+        _ftdBonusEvery = DecimalInputParser.FormatInt(target.FtdBonusEvery);
+        _ftdBonusValue = DecimalInputParser.FormatMoneyInput(target.FtdBonusValue);
+        _salesPctBase = DecimalInputParser.FormatDecimal(target.SalesPctBase);
+        _salesPctWithGoal = DecimalInputParser.FormatDecimal(target.SalesPctWithGoal);
+        _salesPctWithSuperGoal = DecimalInputParser.FormatDecimal(target.SalesPctWithSuperGoal);
+        _salesBonusEvery = DecimalInputParser.FormatMoneyInput(target.SalesBonusEvery);
+        _salesBonusValue = DecimalInputParser.FormatMoneyInput(target.SalesBonusValue);
+        _revPct = DecimalInputParser.FormatDecimal(target.RevPct);
+        _betanoInternaValue = DecimalInputParser.FormatMoneyInput(target.BetanoInternaValue);
+        _betanoMundoBetValue = DecimalInputParser.FormatMoneyInput(target.BetanoMundoBetValue);
+        _supFtdSuperbetNoGoal = DecimalInputParser.FormatDecimal(target.SupFtdSuperbetNoGoal);
+        _supFtdSuperbetWithGoal = DecimalInputParser.FormatDecimal(target.SupFtdSuperbetWithGoal);
+        _supFtdOtherNoGoal = DecimalInputParser.FormatDecimal(target.SupFtdOtherNoGoal);
+        _supFtdOtherWithGoal = DecimalInputParser.FormatDecimal(target.SupFtdOtherWithGoal);
+        _supSalesPctNoGoal = DecimalInputParser.FormatDecimal(target.SupSalesPctNoGoal);
+        _supSalesPctWithGoal = DecimalInputParser.FormatDecimal(target.SupSalesPctWithGoal);
+        _supRevPct = DecimalInputParser.FormatDecimal(target.SupRevPct);
+        _netRevenueFactor = DecimalInputParser.FormatDecimal(target.NetRevenueFactor);
+        _netRevenuePctNoGoal = DecimalInputParser.FormatDecimal(target.NetRevenuePctNoGoal);
+        _netRevenuePctWithGoal = DecimalInputParser.FormatDecimal(target.NetRevenuePctWithGoal);
+        _trafficInvestmentCommissionPct = DecimalInputParser.FormatDecimal(target.TrafficInvestmentCommissionPct);
+        _trafficCpaEsportiva = DecimalInputParser.FormatMoneyInput(target.TrafficCpaEsportiva);
+        _trafficCpaStake = DecimalInputParser.FormatMoneyInput(target.TrafficCpaStake);
+        _trafficCpaBetano = DecimalInputParser.FormatMoneyInput(target.TrafficCpaBetano);
+        _trafficCpaBetMgm = DecimalInputParser.FormatMoneyInput(target.TrafficCpaBetMgm);
+        _trafficCpaNovibet = DecimalInputParser.FormatMoneyInput(target.TrafficCpaNovibet);
+        _trafficCpaBetFair = DecimalInputParser.FormatMoneyInput(target.TrafficCpaBetFair);
+        _trafficCpaBlaze = DecimalInputParser.FormatMoneyInput(target.TrafficCpaBlaze);
+        _trafficCpaSuperbet = DecimalInputParser.FormatMoneyInput(target.TrafficCpaSuperbet);
+        _trafficCpaHiperbet = DecimalInputParser.FormatMoneyInput(target.TrafficCpaHiperbet);
+        _trafficSupBonus = DecimalInputParser.FormatMoneyInput(target.TrafficSupBonus);
+        _trafficSupCommissionPct = DecimalInputParser.FormatDecimal(target.TrafficSupCommissionPct);
+    }
+
+    private void ResetSupervisorDefaults()
+    {
+        _supFtdSuperbetNoGoal = "4";
+        _supFtdSuperbetWithGoal = "5";
+        _supFtdOtherNoGoal = "0,3";
+        _supFtdOtherWithGoal = "0,5";
+        _supSalesPctNoGoal = "0,5";
+        _supSalesPctWithGoal = "0,8";
+        _supRevPct = "10";
+    }
+
+    private void ResetManagementDefaults()
+    {
+        _netRevenueFactor = "50";
+        _netRevenuePctNoGoal = "1,2";
+        _netRevenuePctWithGoal = "1,5";
+    }
+
+    private void ResetTrafficDefaults()
+    {
+        _trafficInvestmentCommissionPct = "0";
+        _trafficCpaEsportiva = "0";
+        _trafficCpaStake = "0";
+        _trafficCpaBetano = "0";
+        _trafficCpaBetMgm = "0";
+        _trafficCpaNovibet = "0";
+        _trafficCpaBetFair = "0";
+        _trafficCpaBlaze = "0";
+        _trafficCpaSuperbet = "0";
+        _trafficCpaHiperbet = "0";
+        _trafficSupBonus = "0";
+        _trafficSupCommissionPct = "0";
+    }
+
+    private Task OnDepartmentChangedAsync(string? value)
+    {
+        _departmentValue = value ?? GeneralDepartmentValue;
+
+        if (!_profileManuallyChanged && Guid.TryParse(_departmentValue, out var departmentId))
+        {
+            var department = Departments.FirstOrDefault(d => d.Id == departmentId);
+            if (department is not null)
+            {
+                _profileValue = department.CalculationType.ToString();
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task OnProfileChangedAsync(string? value)
+    {
+        _profileValue = value ?? CalculationProfile.CommercialAnalyst.ToString();
+        _profileManuallyChanged = true;
+        return Task.CompletedTask;
+    }
+
+    private string GetTrafficCpaValue(string key) => key switch
+    {
+        "esportiva" => _trafficCpaEsportiva,
+        "stake" => _trafficCpaStake,
+        "betano" => _trafficCpaBetano,
+        "betmgm" => _trafficCpaBetMgm,
+        "novibet" => _trafficCpaNovibet,
+        "betfair" => _trafficCpaBetFair,
+        "blaze" => _trafficCpaBlaze,
+        "superbet" => _trafficCpaSuperbet,
+        "hiperbet" => _trafficCpaHiperbet,
+        _ => "0"
+    };
+
+    private void SetTrafficCpaValue(string key, string? value)
+    {
+        var normalized = value ?? "0";
+        switch (key)
+        {
+            case "esportiva": _trafficCpaEsportiva = normalized; break;
+            case "stake": _trafficCpaStake = normalized; break;
+            case "betano": _trafficCpaBetano = normalized; break;
+            case "betmgm": _trafficCpaBetMgm = normalized; break;
+            case "novibet": _trafficCpaNovibet = normalized; break;
+            case "betfair": _trafficCpaBetFair = normalized; break;
+            case "blaze": _trafficCpaBlaze = normalized; break;
+            case "superbet": _trafficCpaSuperbet = normalized; break;
+            case "hiperbet": _trafficCpaHiperbet = normalized; break;
+        }
+    }
+
+    private async Task CancelAsync()
+    {
+        IsOpen = false;
+        await IsOpenChanged.InvokeAsync(false);
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_name))
+        {
+            _localError = "O nome é obrigatório.";
+            return;
+        }
+
+        if (!Enum.TryParse<CalculationProfile>(_profileValue, out var profile))
+        {
+            profile = CalculationProfile.CommercialAnalyst;
+        }
+
+        if (!DecimalInputParser.TryParseInt(_ftdBonusEvery, out var ftdBonusEvery))
+        {
+            _localError = "Informe um valor inteiro válido para bônus FTD a cada.";
+            return;
+        }
+
+        if (!TryParseAllDecimals(out var values, out var parseError))
+        {
+            _localError = parseError;
+            return;
+        }
+
+        if (ftdBonusEvery < 0)
+        {
+            _localError = "Bônus FTD a cada não pode ser negativo.";
+            return;
+        }
+
+        Guid? departmentId = string.IsNullOrWhiteSpace(_departmentValue)
+            ? null
+            : Guid.TryParse(_departmentValue, out var parsed) ? parsed : null;
+
+        var request = new CareerLevelRequest(
+            _name.Trim(),
+            departmentId,
+            profile,
+            _isActive,
+            values.BaseSalary,
+            values.CommissionWithoutGoalPct,
+            values.CommissionWithGoalPct,
+            values.CommissionWithSuperGoalPct,
+            values.GroupCommissionPerPercent,
+            values.GroupCommissionPer20Percent,
+            values.DefaultCpaValue,
+            values.GoalBonusValue,
+            values.FtdRateBase,
+            values.FtdRateWithGoal,
+            values.FtdRateWithSuperGoal,
+            values.FtdSuperbetRate,
+            ftdBonusEvery,
+            values.FtdBonusValue,
+            values.SalesPctBase,
+            values.SalesPctWithGoal,
+            values.SalesPctWithSuperGoal,
+            values.SalesBonusEvery,
+            values.SalesBonusValue,
+            values.RevPct,
+            values.BetanoInternaValue,
+            values.BetanoMundoBetValue,
+            values.SupFtdSuperbetNoGoal,
+            values.SupFtdSuperbetWithGoal,
+            values.SupFtdOtherNoGoal,
+            values.SupFtdOtherWithGoal,
+            values.SupSalesPctNoGoal,
+            values.SupSalesPctWithGoal,
+            values.SupRevPct,
+            values.NetRevenueFactor,
+            values.NetRevenuePctNoGoal,
+            values.NetRevenuePctWithGoal,
+            values.TrafficInvestmentCommissionPct,
+            values.TrafficCpaEsportiva,
+            values.TrafficCpaStake,
+            values.TrafficCpaBetano,
+            values.TrafficCpaBetMgm,
+            values.TrafficCpaNovibet,
+            values.TrafficCpaBetFair,
+            values.TrafficCpaBlaze,
+            values.TrafficCpaSuperbet,
+            values.TrafficCpaHiperbet,
+            values.TrafficSupBonus,
+            values.TrafficSupCommissionPct);
+
+        await OnSubmit.InvokeAsync(request);
+    }
+
+    private bool TryParseAllDecimals(out ParsedValues values, out string? error)
+    {
+        values = null!;
+        error = null;
+
+        if (!TryParseField(_baseSalary, out var baseSalary)
+            || !TryParseField(_commissionWithoutGoalPct, out var commissionWithoutGoalPct)
+            || !TryParseField(_commissionWithGoalPct, out var commissionWithGoalPct)
+            || !TryParseField(_commissionWithSuperGoalPct, out var commissionWithSuperGoalPct)
+            || !TryParseField(_groupCommissionPerPercent, out var groupCommissionPerPercent)
+            || !TryParseField(_groupCommissionPer20Percent, out var groupCommissionPer20Percent)
+            || !TryParseField(_defaultCpaValue, out var defaultCpaValue)
+            || !TryParseField(_goalBonusValue, out var goalBonusValue)
+            || !TryParseField(_ftdRateBase, out var ftdRateBase)
+            || !TryParseField(_ftdRateWithGoal, out var ftdRateWithGoal)
+            || !TryParseField(_ftdRateWithSuperGoal, out var ftdRateWithSuperGoal)
+            || !TryParseField(_ftdSuperbetRate, out var ftdSuperbetRate)
+            || !TryParseField(_ftdBonusValue, out var ftdBonusValue)
+            || !TryParseField(_salesPctBase, out var salesPctBase)
+            || !TryParseField(_salesPctWithGoal, out var salesPctWithGoal)
+            || !TryParseField(_salesPctWithSuperGoal, out var salesPctWithSuperGoal)
+            || !TryParseField(_salesBonusEvery, out var salesBonusEvery)
+            || !TryParseField(_salesBonusValue, out var salesBonusValue)
+            || !TryParseField(_revPct, out var revPct)
+            || !TryParseField(_betanoInternaValue, out var betanoInternaValue)
+            || !TryParseField(_betanoMundoBetValue, out var betanoMundoBetValue)
+            || !TryParseField(_supFtdSuperbetNoGoal, out var supFtdSuperbetNoGoal)
+            || !TryParseField(_supFtdSuperbetWithGoal, out var supFtdSuperbetWithGoal)
+            || !TryParseField(_supFtdOtherNoGoal, out var supFtdOtherNoGoal)
+            || !TryParseField(_supFtdOtherWithGoal, out var supFtdOtherWithGoal)
+            || !TryParseField(_supSalesPctNoGoal, out var supSalesPctNoGoal)
+            || !TryParseField(_supSalesPctWithGoal, out var supSalesPctWithGoal)
+            || !TryParseField(_supRevPct, out var supRevPct)
+            || !TryParseField(_netRevenueFactor, out var netRevenueFactor)
+            || !TryParseField(_netRevenuePctNoGoal, out var netRevenuePctNoGoal)
+            || !TryParseField(_netRevenuePctWithGoal, out var netRevenuePctWithGoal)
+            || !TryParseField(_trafficInvestmentCommissionPct, out var trafficInvestmentCommissionPct)
+            || !TryParseField(_trafficCpaEsportiva, out var trafficCpaEsportiva)
+            || !TryParseField(_trafficCpaStake, out var trafficCpaStake)
+            || !TryParseField(_trafficCpaBetano, out var trafficCpaBetano)
+            || !TryParseField(_trafficCpaBetMgm, out var trafficCpaBetMgm)
+            || !TryParseField(_trafficCpaNovibet, out var trafficCpaNovibet)
+            || !TryParseField(_trafficCpaBetFair, out var trafficCpaBetFair)
+            || !TryParseField(_trafficCpaBlaze, out var trafficCpaBlaze)
+            || !TryParseField(_trafficCpaSuperbet, out var trafficCpaSuperbet)
+            || !TryParseField(_trafficCpaHiperbet, out var trafficCpaHiperbet)
+            || !TryParseField(_trafficSupBonus, out var trafficSupBonus)
+            || !TryParseField(_trafficSupCommissionPct, out var trafficSupCommissionPct))
+        {
+            error = "Informe valores numéricos válidos.";
+            return false;
+        }
+
+        values = new ParsedValues(
+            baseSalary,
+            commissionWithoutGoalPct,
+            commissionWithGoalPct,
+            commissionWithSuperGoalPct,
+            groupCommissionPerPercent,
+            groupCommissionPer20Percent,
+            defaultCpaValue,
+            goalBonusValue,
+            ftdRateBase,
+            ftdRateWithGoal,
+            ftdRateWithSuperGoal,
+            ftdSuperbetRate,
+            ftdBonusValue,
+            salesPctBase,
+            salesPctWithGoal,
+            salesPctWithSuperGoal,
+            salesBonusEvery,
+            salesBonusValue,
+            revPct,
+            betanoInternaValue,
+            betanoMundoBetValue,
+            supFtdSuperbetNoGoal,
+            supFtdSuperbetWithGoal,
+            supFtdOtherNoGoal,
+            supFtdOtherWithGoal,
+            supSalesPctNoGoal,
+            supSalesPctWithGoal,
+            supRevPct,
+            netRevenueFactor,
+            netRevenuePctNoGoal,
+            netRevenuePctWithGoal,
+            trafficInvestmentCommissionPct,
+            trafficCpaEsportiva,
+            trafficCpaStake,
+            trafficCpaBetano,
+            trafficCpaBetMgm,
+            trafficCpaNovibet,
+            trafficCpaBetFair,
+            trafficCpaBlaze,
+            trafficCpaSuperbet,
+            trafficCpaHiperbet,
+            trafficSupBonus,
+            trafficSupCommissionPct);
+
+        return true;
+    }
+
+    private static bool TryParseField(string value, out decimal result) =>
+        DecimalInputParser.TryParse(value, out result);
+
+    private sealed record ParsedValues(
+        decimal BaseSalary,
+        decimal CommissionWithoutGoalPct,
+        decimal CommissionWithGoalPct,
+        decimal CommissionWithSuperGoalPct,
+        decimal GroupCommissionPerPercent,
+        decimal GroupCommissionPer20Percent,
+        decimal DefaultCpaValue,
+        decimal GoalBonusValue,
+        decimal FtdRateBase,
+        decimal FtdRateWithGoal,
+        decimal FtdRateWithSuperGoal,
+        decimal FtdSuperbetRate,
+        decimal FtdBonusValue,
+        decimal SalesPctBase,
+        decimal SalesPctWithGoal,
+        decimal SalesPctWithSuperGoal,
+        decimal SalesBonusEvery,
+        decimal SalesBonusValue,
+        decimal RevPct,
+        decimal BetanoInternaValue,
+        decimal BetanoMundoBetValue,
+        decimal SupFtdSuperbetNoGoal,
+        decimal SupFtdSuperbetWithGoal,
+        decimal SupFtdOtherNoGoal,
+        decimal SupFtdOtherWithGoal,
+        decimal SupSalesPctNoGoal,
+        decimal SupSalesPctWithGoal,
+        decimal SupRevPct,
+        decimal NetRevenueFactor,
+        decimal NetRevenuePctNoGoal,
+        decimal NetRevenuePctWithGoal,
+        decimal TrafficInvestmentCommissionPct,
+        decimal TrafficCpaEsportiva,
+        decimal TrafficCpaStake,
+        decimal TrafficCpaBetano,
+        decimal TrafficCpaBetMgm,
+        decimal TrafficCpaNovibet,
+        decimal TrafficCpaBetFair,
+        decimal TrafficCpaBlaze,
+        decimal TrafficCpaSuperbet,
+        decimal TrafficCpaHiperbet,
+        decimal TrafficSupBonus,
+        decimal TrafficSupCommissionPct);
+}

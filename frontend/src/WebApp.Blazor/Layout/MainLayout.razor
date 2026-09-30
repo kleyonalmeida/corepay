@@ -1,0 +1,65 @@
+﻿@inherits LayoutComponentBase
+@inject AuthService AuthService
+@inject SidebarState SidebarState
+@implements IDisposable
+
+<div class="@ShellCssClass">
+    @if (AuthService.IsAuthenticated)
+    {
+        @if (SidebarState.IsMobileOpen)
+        {
+            <button type="button"
+                    class="app-shell__overlay"
+                    aria-label="Fechar menu"
+                    @onclick="CloseMobileDrawerAsync"></button>
+        }
+
+        <AppSidebar />
+
+        <div class="app-shell__content">
+            <AppHeader />
+            <main class="app-shell__main">
+                @Body
+            </main>
+        </div>
+
+        <SessionIdleHost />
+    }
+    else
+    {
+        <main class="app-shell__main app-shell__main--bare">
+            @Body
+        </main>
+    }
+</div>
+
+@code {
+    private string ShellCssClass =>
+        string.Join(' ', new[]
+        {
+            "app-shell",
+            SidebarState.IsDesktopCollapsed ? "app-shell--sidebar-collapsed" : null,
+            SidebarState.IsMobileOpen ? "app-shell--mobile-open" : null
+        }.Where(static c => !string.IsNullOrWhiteSpace(c)));
+
+    protected override void OnInitialized()
+    {
+        SidebarState.StateChanged += HandleSidebarStateChanged;
+    }
+
+    private void HandleSidebarStateChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private Task CloseMobileDrawerAsync()
+    {
+        SidebarState.CloseMobileDrawer();
+        return Task.CompletedTask;
+    }
+
+    public void Dispose()
+    {
+        SidebarState.StateChanged -= HandleSidebarStateChanged;
+    }
+}

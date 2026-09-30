@@ -1,0 +1,139 @@
+<div class="traffic-week-panel payroll-nested-block">
+    <div class="traffic-week-panel__header">
+        <h3 class="text-label">Semana @WeekNumber</h3>
+        @if (CalculatedWeek is not null)
+        {
+            <span class="traffic-week-panel__total text-table-money tabular-nums">
+                @MoneyFormatter.FormatMoney(CalculatedWeek.TotalAmount)
+            </span>
+        }
+    </div>
+
+    <div class="traffic-week-panel__channels payroll-nested-block__grid">
+        @foreach (var channel in TrafficMediaChannelLabels.AllChannels)
+        {
+            <Input Label="@TrafficMediaChannelLabels.Format(channel)"
+                   IsMoney="true"
+                   Value="@GetChannelAmount(channel)"
+                   ValueChanged="@(value => OnChannelAmountChanged(channel, value))"
+                   Disabled="@(!CanWrite || IsSaving)" />
+        }
+    </div>
+
+    <div class="traffic-week-panel__deposits">
+        <div class="traffic-week-panel__deposits-header">
+            <span class="text-label">Depósitos</span>
+            @if (CanWrite)
+            {
+                <Button Variant="ButtonVariant.Ghost"
+                        Size="ButtonSize.Sm"
+                        Disabled="@IsSaving"
+                        OnClick="@AddDepositAsync">
+                    Adicionar
+                </Button>
+            }
+        </div>
+
+        @if (Deposits.Count == 0)
+        {
+            <div class="traffic-week-panel__deposits-empty">
+                <EmptyState Title="Nenhum depósito cadastrado"
+                            Description="Adicione depósitos para esta semana." />
+            </div>
+        }
+        else
+        {
+            @for (var index = 0; index < Deposits.Count; index++)
+            {
+                var depositIndex = index;
+                var deposit = Deposits[depositIndex];
+                <div class="traffic-week-panel__deposit-row">
+                    <Input Label="Solicitado"
+                           IsMoney="true"
+                           Value="@deposit.RequestedAmountText"
+                           ValueChanged="@(value => UpdateDeposit(depositIndex, requested: value))"
+                           Disabled="@(!CanWrite || IsSaving)" />
+                    <Input Label="Depositado"
+                           IsMoney="true"
+                           Value="@deposit.DepositedAmountText"
+                           ValueChanged="@(value => UpdateDeposit(depositIndex, deposited: value))"
+                           Disabled="@(!CanWrite || IsSaving)" />
+                    <Select Label="Status"
+                            Value="@deposit.StatusValue"
+                            Disabled="true">
+                        @foreach (var status in Enum.GetValues<TrafficDepositStatusDto>())
+                        {
+                            <option value="@status">@TrafficDepositStatusLabels.Format(status)</option>
+                        }
+                    </Select>
+                    @if (CanWrite)
+                    {
+                        <Button Variant="ButtonVariant.Ghost"
+                                Size="ButtonSize.Sm"
+                                Disabled="@IsSaving"
+                                OnClick="@(() => RemoveDeposit(depositIndex))">
+                            Remover
+                        </Button>
+                    }
+                </div>
+            }
+        }
+    </div>
+
+    @if (CalculatedWeek is not null)
+    {
+        <div class="traffic-week-panel__stats">
+            <StatCard Label="Solicitado" Value="@CalculatedWeek.RequestedAmount" Tone="SemanticTone.Yellow" />
+            <StatCard Label="Depositado" Value="@CalculatedWeek.DepositedAmount" Tone="SemanticTone.Emerald" />
+            <StatCard Label="Saldo" Value="@CalculatedWeek.Balance" Tone="SemanticTone.Emerald" />
+            <StatCard Label="Total" Value="@CalculatedWeek.TotalAmount" Tone="SemanticTone.Emerald" />
+            <StatCard Label="Gasto" Value="@CalculatedWeek.SpentAmount" Tone="SemanticTone.Purple" />
+            <StatCard Label="Imposto" Value="@CalculatedWeek.TaxAmount" Tone="SemanticTone.Orange" />
+        </div>
+        <p class="traffic-week-panel__suggestion text-label">
+            Sugestão próxima solicitação:
+            <span class="text-table-money tabular-nums">@MoneyFormatter.FormatMoney(CalculatedWeek.SuggestedNext)</span>
+        </p>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public int WeekNumber { get; set; }
+    [Parameter, EditorRequired] public TrafficWeekEditState State { get; set; } = null!;
+    [Parameter] public TrafficWeekDto? CalculatedWeek { get; set; }
+    [Parameter] public bool CanWrite { get; set; }
+    [Parameter] public bool IsSaving { get; set; }
+
+    private IReadOnlyList<TrafficWeekDepositEditState> Deposits => State.Deposits;
+
+    private string GetChannelAmount(TrafficMediaChannelDto channel) =>
+        State.ChannelAmounts.TryGetValue(channel, out var amount) ? amount : "0";
+
+    private void OnChannelAmountChanged(TrafficMediaChannelDto channel, string? value)
+    {
+        State.ChannelAmounts[channel] = value ?? "0";
+    }
+
+    private Task AddDepositAsync()
+    {
+        State.Deposits.Add(new TrafficWeekDepositEditState());
+        return Task.CompletedTask;
+    }
+
+    private void RemoveDeposit(int index) => State.Deposits.RemoveAt(index);
+
+    private void UpdateDeposit(int index, string? requested = null, string? deposited = null)
+    {
+        var deposit = State.Deposits[index];
+        if (requested is not null)
+        {
+            deposit.RequestedAmountText = requested;
+        }
+
+        if (deposited is not null)
+        {
+            deposit.DepositedAmountText = deposited;
+        }
+    }
+
+}

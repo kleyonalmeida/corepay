@@ -1,0 +1,235 @@
+@inject IPaymentMethodApiService PaymentMethodApiService
+
+<Card Class="settings-section-card">
+    <HeaderContent>
+        <SectionCardHeader Title="Formas de pagamento" Icon="IconKind.Wallet">
+            <Actions>
+                <Button Size="ButtonSize.Sm" OnClick="@OpenCreateDialogAsync">
+                    Nova forma
+                </Button>
+            </Actions>
+        </SectionCardHeader>
+    </HeaderContent>
+    <ChildContent>
+        @if (_isLoading)
+        {
+            <div class="settings-section__loading">
+                <Spinner Label="Carregando formas de pagamento..." />
+            </div>
+        }
+        else if (!string.IsNullOrWhiteSpace(_loadError))
+        {
+            <EmptyState Title="Erro ao carregar formas de pagamento" Description="@_loadError" />
+        }
+        else if (_paymentMethods.Count == 0)
+        {
+            <EmptyState Title="Nenhuma forma de pagamento cadastrada"
+                        Description="Cadastre Pix, cartão, boleto e demais métodos usados nas saídas." />
+        }
+        else
+        {
+            <div class="settings-table-wrapper">
+                <table class="settings-table">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var method in _paymentMethods)
+                        {
+                            <tr>
+                                <td>
+                                    <PaymentMethodChip Name="@method.Name" />
+                                </td>
+                                <td>
+                                    <StatusBadge Kind="@(method.IsActive ? StatusKind.Active : StatusKind.Inactive)" />
+                                </td>
+                                <td class="settings-table__actions">
+                                    <div class="settings-table__action-group">
+                                        <Button Variant="ButtonVariant.Ghost"
+                                                Size="ButtonSize.Sm"
+                                                OnClick="@(() => OpenEditDialogAsync(method))">
+                                            Editar
+                                        </Button>
+                                        <Button Variant="ButtonVariant.Ghost"
+                                                Size="ButtonSize.Sm"
+                                                OnClick="@(() => OpenDeleteDialogAsync(method))">
+                                            Excluir
+                                        </Button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </ChildContent>
+</Card>
+
+<PaymentMethodFormDialog IsOpen="@_dialogOpen"
+                         IsOpenChanged="@OnDialogOpenChangedAsync"
+                         EditTarget="@_editTarget"
+                         IsSaving="@_isSaving"
+                         ErrorMessage="@_formError"
+                         OnSubmit="@SaveAsync" />
+
+<Dialog IsOpen="@_deleteDialogOpen" IsOpenChanged="@OnDeleteDialogOpenChangedAsync" Title="Excluir forma de pagamento">
+    <p class="settings-form__hint">
+        Confirma a exclusão de <strong>@_deleteTarget?.Name</strong>?
+    </p>
+    @if (!string.IsNullOrWhiteSpace(_deleteError))
+    {
+        <p class="settings-form__error" role="alert">@_deleteError</p>
+    }
+    <div class="settings-form__actions">
+        <Button Variant="ButtonVariant.Outline" Disabled="@_isDeleting" OnClick="@CancelDeleteAsync">
+            Cancelar
+        </Button>
+        <Button Variant="ButtonVariant.Destructive" Disabled="@_isDeleting" OnClick="@ConfirmDeleteAsync">
+            @(_isDeleting ? "Excluindo..." : "Excluir")
+        </Button>
+    </div>
+</Dialog>
+
+@code {
+    private readonly List<PaymentMethodDto> _paymentMethods = [];
+    private bool _isLoading = true;
+    private bool _isSaving;
+    private bool _isDeleting;
+    private string? _loadError;
+    private string? _formError;
+    private string? _deleteError;
+    private bool _dialogOpen;
+    private bool _deleteDialogOpen;
+    private PaymentMethodDto? _editTarget;
+    private PaymentMethodDto? _deleteTarget;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPaymentMethodsAsync();
+    }
+
+    private async Task LoadPaymentMethodsAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+        _paymentMethods.Clear();
+
+        var result = await PaymentMethodApiService.GetPaymentMethodsAsync();
+        if (result.Status == PaymentMethodApiStatus.Success && result.PaymentMethods is not null)
+        {
+            _paymentMethods.AddRange(result.PaymentMethods.OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase));
+        }
+        else
+        {
+            _loadError = PaymentMethodErrorMessages.ForList(result);
+        }
+
+        _isLoading = false;
+    }
+
+    private Task OpenCreateDialogAsync()
+    {
+        _editTarget = null;
+        _formError = null;
+        _dialogOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private Task OpenEditDialogAsync(PaymentMethodDto method)
+    {
+        _editTarget = method;
+        _formError = null;
+        _dialogOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private Task OpenDeleteDialogAsync(PaymentMethodDto method)
+    {
+        _deleteTarget = method;
+        _deleteError = null;
+        _deleteDialogOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private Task OnDialogOpenChangedAsync(bool isOpen)
+    {
+        _dialogOpen = isOpen;
+        if (!isOpen)
+        {
+            _editTarget = null;
+            _formError = null;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task OnDeleteDialogOpenChangedAsync(bool isOpen)
+    {
+        _deleteDialogOpen = isOpen;
+        if (!isOpen)
+        {
+            _deleteTarget = null;
+            _deleteError = null;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task SaveAsync(PaymentMethodRequest request)
+    {
+        _isSaving = true;
+        _formError = null;
+
+        PaymentMethodMutationResult result = _editTarget is null
+            ? await PaymentMethodApiService.CreatePaymentMethodAsync(request)
+            : await PaymentMethodApiService.UpdatePaymentMethodAsync(_editTarget.Id, request);
+
+        if (result.Status == PaymentMethodApiStatus.Success)
+        {
+            _dialogOpen = false;
+            _editTarget = null;
+            await LoadPaymentMethodsAsync();
+        }
+        else
+        {
+            _formError = PaymentMethodErrorMessages.ForMutation(result);
+        }
+
+        _isSaving = false;
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_deleteTarget is null)
+        {
+            return;
+        }
+
+        _isDeleting = true;
+        _deleteError = null;
+
+        var result = await PaymentMethodApiService.DeletePaymentMethodAsync(_deleteTarget.Id);
+        if (result.Status == PaymentMethodApiStatus.Success)
+        {
+            _deleteDialogOpen = false;
+            _deleteTarget = null;
+            await LoadPaymentMethodsAsync();
+        }
+        else
+        {
+            _deleteError = PaymentMethodErrorMessages.ForDelete(result);
+        }
+
+        _isDeleting = false;
+    }
+
+    private async Task CancelDeleteAsync()
+    {
+        await OnDeleteDialogOpenChangedAsync(false);
+    }
+}

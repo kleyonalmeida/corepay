@@ -1,0 +1,116 @@
+<div class="payroll-nested-block">
+    <div class="payroll-nested-block__header">
+        <h3 class="payroll-nested-block__title">Bônus manuais</h3>
+        <Button Variant="ButtonVariant.Outline" Size="ButtonSize.Sm" OnClick="@AddBonusAsync">
+            <Icon Kind="IconKind.Plus" Size="IconSize.Default" />
+            Bônus
+        </Button>
+    </div>
+    @for (var i = 0; i < State.BonusEntries.Count; i++)
+    {
+        var index = i;
+        var entry = State.BonusEntries[index];
+        <div class="payroll-nested-block__row">
+            <Select Label="Projeto" Value="@(entry.ProjectId?.ToString() ?? string.Empty)" ValueChanged="@(v => UpdateBonusProjectAsync(index, v))">
+                <option value="">Geral</option>
+                @foreach (var option in Options.Projects)
+                {
+                    <option value="@option.Id">@option.Name</option>
+                }
+            </Select>
+            <Input Label="Valor" IsMoney="true" Value="@PayrollInputHelpers.FormatMoney(entry.Value)" ValueChanged="@(v => UpdateBonusValueAsync(index, v))" />
+            <Input Label="Justificativa" Value="@entry.Justification" ValueChanged="@(v => UpdateBonusJustificationAsync(index, v))" />
+            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Sm" OnClick="@(() => RemoveBonusAsync(index))">
+                <Icon Kind="IconKind.Trash2" Size="IconSize.Default" />
+            </Button>
+        </div>
+    }
+</div>
+
+<div class="payroll-nested-block">
+    <div class="payroll-nested-block__header">
+        <h3 class="payroll-nested-block__title">Descontos</h3>
+        <Button Variant="ButtonVariant.Outline" Size="ButtonSize.Sm" OnClick="@AddDeductionAsync">
+            <Icon Kind="IconKind.Plus" Size="IconSize.Default" />
+            Desconto
+        </Button>
+    </div>
+    @for (var i = 0; i < State.DeductionEntries.Count; i++)
+    {
+        var index = i;
+        var entry = State.DeductionEntries[index];
+        <div class="payroll-nested-block__row">
+            <Input Label="Descrição" Value="@entry.Description" ValueChanged="@(v => UpdateDeductionDescriptionAsync(index, v))" />
+            <Input Label="Valor" IsMoney="true" Value="@PayrollInputHelpers.FormatMoney(entry.Value)" ValueChanged="@(v => UpdateDeductionValueAsync(index, v))" />
+            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Sm" OnClick="@(() => RemoveDeductionAsync(index))">
+                <Icon Kind="IconKind.Trash2" Size="IconSize.Default" />
+            </Button>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PayrollEntryEditState State { get; set; } = default!;
+    [Parameter, EditorRequired] public PayrollEditorOptionsDto Options { get; set; } = default!;
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private async Task AddBonusAsync()
+    {
+        State.BonusEntries.Add(new BonusEntryDto(null, 0m));
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task RemoveBonusAsync(int index)
+    {
+        State.BonusEntries.RemoveAt(index);
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateBonusProjectAsync(int index, string? value)
+    {
+        var current = State.BonusEntries[index];
+        State.BonusEntries[index] = current with { ProjectId = Guid.TryParse(value, out var id) ? id : null };
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateBonusValueAsync(int index, string? value)
+    {
+        var current = State.BonusEntries[index];
+        State.BonusEntries[index] = current with { Value = PayrollInputHelpers.ParseMoney(value) };
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateBonusJustificationAsync(int index, string? value)
+    {
+        var current = State.BonusEntries[index];
+        State.BonusEntries[index] = current with { Justification = value };
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task AddDeductionAsync()
+    {
+        State.DeductionEntries.Add(new DeductionEntryDto(0m));
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task RemoveDeductionAsync(int index)
+    {
+        State.DeductionEntries.RemoveAt(index);
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateDeductionDescriptionAsync(int index, string? value)
+    {
+        var current = State.DeductionEntries[index];
+        State.DeductionEntries[index] = current with { Description = value };
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateDeductionValueAsync(int index, string? value)
+    {
+        var current = State.DeductionEntries[index];
+        State.DeductionEntries[index] = current with { Value = PayrollInputHelpers.ParseMoney(value) };
+        await OnChanged.InvokeAsync();
+    }
+
+}

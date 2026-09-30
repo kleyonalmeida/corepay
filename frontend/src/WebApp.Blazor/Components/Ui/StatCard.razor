@@ -1,0 +1,41 @@
+@using WebApp.Blazor.Formatting
+
+<article class="ui-card stat-card">
+    <div class="stat-card__header">
+        <span class="text-label">@Label</span>
+        <div class="stat-card__icon stat-card__icon--@Tone.ToString().ToLowerInvariant()">
+            @if (IconContent is not null)
+            {
+                @IconContent
+            }
+            else
+            {
+                <Icon Kind="@(Icon ?? IconMetadata.ForStatCardTone(Tone))" />
+            }
+        </div>
+    </div>
+    <p class="text-stat-value tabular-nums stat-card__value">
+        @if (ValueText is not null)
+        {
+            @ValueText
+        }
+        else if (Value.HasValue)
+        {
+            @MoneyFormatter.FormatMoney(Value.Value)
+        }
+    </p>
+    @if (!string.IsNullOrWhiteSpace(Subtitle))
+    {
+        <p class="stat-card__subtitle">@Subtitle</p>
+    }
+</article>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = string.Empty;
+    [Parameter] public decimal? Value { get; set; }
+    [Parameter] public string? ValueText { get; set; }
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public SemanticTone Tone { get; set; } = SemanticTone.Primary;
+    [Parameter] public IconKind? Icon { get; set; }
+    [Parameter] public RenderFragment? IconContent { get; set; }
+}

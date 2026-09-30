@@ -1,0 +1,190 @@
+<div class="payroll-nested-block">
+    <div class="payroll-nested-block__header">
+        <h3 class="payroll-nested-block__title">Projetos comerciais</h3>
+        <Button Variant="ButtonVariant.Outline" Size="ButtonSize.Sm" OnClick="@AddProjectAsync">
+            <Icon Kind="IconKind.Plus" Size="IconSize.Default" />
+            Projeto
+        </Button>
+    </div>
+
+    @for (var i = 0; i < State.CommercialProjectEntries.Count; i++)
+    {
+        var index = i;
+        var entry = State.CommercialProjectEntries[index];
+        var project = Options.Projects.FirstOrDefault(p => p.Id == entry.ProjectId);
+        var isHubla = project?.Platform == ProjectPlatform.Hubla;
+
+        <div class="payroll-nested-block payroll-nested-block--inner">
+            <div class="payroll-nested-block__header">
+                <Select Label="Projeto"
+                        Value="@entry.ProjectId.ToString()"
+                        ValueChanged="@(value => OnProjectChangedAsync(index, value))">
+                    <option value="">Selecione</option>
+                    @foreach (var option in Options.Projects)
+                    {
+                        <option value="@option.Id">@option.Name</option>
+                    }
+                </Select>
+                <Button Variant="ButtonVariant.Ghost"
+                        Size="ButtonSize.Sm"
+                        OnClick="@(() => RemoveProjectAsync(index))">
+                    <Icon Kind="IconKind.Trash2" Size="IconSize.Default" />
+                </Button>
+            </div>
+
+            @if (isHubla)
+            {
+                <p class="payroll-hubla-hint">Plataforma Hubla — teto máximo de 4% sobre vendas.</p>
+            }
+
+            <div class="payroll-nested-block__grid">
+                <Input Label="FTD total" Kind="NumericInputKind.Integer" Value="@PayrollInputHelpers.FormatInt(entry.FtdTotal)" ValueChanged="@(v => UpdateInt(index, e => e with { FtdTotal = PayrollInputHelpers.ParseInt(v) }))" />
+                <Input Label="FTD Superbet" Kind="NumericInputKind.Integer" Value="@PayrollInputHelpers.FormatInt(entry.FtdSuperbet)" ValueChanged="@(v => UpdateInt(index, e => e with { FtdSuperbet = PayrollInputHelpers.ParseInt(v) }))" />
+                <Input Label="CPA qtd" Kind="NumericInputKind.Integer" Value="@PayrollInputHelpers.FormatInt(entry.CpaCount)" ValueChanged="@(v => UpdateInt(index, e => e with { CpaCount = PayrollInputHelpers.ParseInt(v) }))" />
+                <Input Label="Vendas" IsMoney="true" Value="@PayrollInputHelpers.FormatMoney(entry.SalesAmount)" ValueChanged="@(v => UpdateDecimal(index, e => e with { SalesAmount = PayrollInputHelpers.ParseMoney(v) }))" />
+                <Input Label="Rev" IsMoney="true" Value="@PayrollInputHelpers.FormatMoney(entry.Rev)" ValueChanged="@(v => UpdateDecimal(index, e => e with { Rev = PayrollInputHelpers.ParseMoney(v) }))" />
+            </div>
+
+            <div class="payroll-nested-block__toggles">
+                <GoalToggle Label="Meta FTD" Value="@entry.IsFtdGoalReached" ValueChanged="@(v => UpdateBool(index, e => e with { IsFtdGoalReached = v }))" />
+                <GoalToggle Label="Meta FTD projeto" Value="@entry.IsProjectFtdGoalReached" ValueChanged="@(v => UpdateBool(index, e => e with { IsProjectFtdGoalReached = v }))" />
+                <GoalToggle Label="Meta vendas" Value="@entry.IsSalesGoalReached" ValueChanged="@(v => UpdateBool(index, e => e with { IsSalesGoalReached = v }))" />
+                <GoalToggle Label="Meta vendas projeto" Value="@entry.IsProjectSalesGoalReached" ValueChanged="@(v => UpdateBool(index, e => e with { IsProjectSalesGoalReached = v }))" />
+            </div>
+        </div>
+    }
+
+    <div class="payroll-nested-block payroll-nested-block--inner">
+        <h4 class="payroll-nested-block__subtitle">Betano (colaborador)</h4>
+        <div class="payroll-nested-block__grid">
+            <Input Label="Betano Interna" Kind="NumericInputKind.Integer" Value="@PayrollInputHelpers.FormatInt(State.BetanoInternaCount)" ValueChanged="@(async v => { State.BetanoInternaCount = PayrollInputHelpers.ParseInt(v); await OnChanged.InvokeAsync(); })" />
+            <Input Label="Betano Mundo Bet" Kind="NumericInputKind.Integer" Value="@PayrollInputHelpers.FormatInt(State.BetanoMundoBetCount)" ValueChanged="@(async v => { State.BetanoMundoBetCount = PayrollInputHelpers.ParseInt(v); await OnChanged.InvokeAsync(); })" />
+        </div>
+    </div>
+
+    <Select Label="Projeto pagador &lt; R$100"
+            Value="@(State.CommissionPayingProjectId?.ToString() ?? string.Empty)"
+            ValueChanged="@OnCommissionPayingChangedAsync">
+        <option value="">Nenhum</option>
+        @foreach (var option in Options.Projects)
+        {
+            <option value="@option.Id">@option.Name</option>
+        }
+    </Select>
+
+    <div class="payroll-nested-block payroll-nested-block--inner @(State.IsComplementSumInvalid ? "payroll-nested-block--error" : null)">
+        <div class="payroll-nested-block__header">
+            <h4 class="payroll-nested-block__subtitle">Complemento pagador (%)</h4>
+            <Button Variant="ButtonVariant.Outline" Size="ButtonSize.Sm" OnClick="@AddComplementAsync">
+                <Icon Kind="IconKind.Plus" Size="IconSize.Default" />
+                Alocação
+            </Button>
+        </div>
+        @if (State.IsComplementSumInvalid)
+        {
+            <p class="payroll-complement-error" role="alert">A soma deve ser 100% (atual: @State.ComplementPercentageSum.ToString("0.##")%).</p>
+        }
+        @for (var i = 0; i < State.ComplementPayingProjects.Count; i++)
+        {
+            var index = i;
+            var item = State.ComplementPayingProjects[index];
+            <div class="payroll-nested-block__row">
+                <Select Label="Projeto"
+                        Value="@item.ProjectId.ToString()"
+                        ValueChanged="@(v => UpdateComplementProjectAsync(index, v))">
+                    @foreach (var option in Options.Projects)
+                    {
+                        <option value="@option.Id">@option.Name</option>
+                    }
+                </Select>
+                <Input Label="%" Kind="NumericInputKind.Percent" Value="@PayrollInputHelpers.FormatPercent(item.Percentage)" ValueChanged="@(v => UpdateComplementPctAsync(index, v))" />
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Sm" OnClick="@(() => RemoveComplementAsync(index))">
+                    <Icon Kind="IconKind.Trash2" Size="IconSize.Default" />
+                </Button>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PayrollEntryEditState State { get; set; } = default!;
+    [Parameter, EditorRequired] public PayrollEditorOptionsDto Options { get; set; } = default!;
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private async Task AddProjectAsync()
+    {
+        var project = Options.Projects.FirstOrDefault();
+        if (project is null) return;
+        State.CommercialProjectEntries.Add(new CommercialAnalystProjectEntryDto(
+            project.Id, project.Platform, 0, 0, false, false, 0, 0m, false, false, 0m));
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task RemoveProjectAsync(int index)
+    {
+        State.CommercialProjectEntries.RemoveAt(index);
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task OnProjectChangedAsync(int index, string? value)
+    {
+        if (!Guid.TryParse(value, out var projectId)) return;
+        var project = Options.Projects.First(p => p.Id == projectId);
+        var current = State.CommercialProjectEntries[index];
+        State.CommercialProjectEntries[index] = current with { ProjectId = projectId, Platform = project.Platform };
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateInt(int index, Func<CommercialAnalystProjectEntryDto, CommercialAnalystProjectEntryDto> update)
+    {
+        State.CommercialProjectEntries[index] = update(State.CommercialProjectEntries[index]);
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateDecimal(int index, Func<CommercialAnalystProjectEntryDto, CommercialAnalystProjectEntryDto> update)
+    {
+        State.CommercialProjectEntries[index] = update(State.CommercialProjectEntries[index]);
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateBool(int index, Func<CommercialAnalystProjectEntryDto, CommercialAnalystProjectEntryDto> update)
+    {
+        State.CommercialProjectEntries[index] = update(State.CommercialProjectEntries[index]);
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task OnCommissionPayingChangedAsync(string? value)
+    {
+        State.CommissionPayingProjectId = Guid.TryParse(value, out var id) ? id : null;
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task AddComplementAsync()
+    {
+        var project = Options.Projects.FirstOrDefault();
+        if (project is null) return;
+        State.ComplementPayingProjects.Add(new ComplementPayingProjectDto(project.Id, 0m));
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task RemoveComplementAsync(int index)
+    {
+        State.ComplementPayingProjects.RemoveAt(index);
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateComplementProjectAsync(int index, string? value)
+    {
+        if (!Guid.TryParse(value, out var projectId)) return;
+        var current = State.ComplementPayingProjects[index];
+        State.ComplementPayingProjects[index] = current with { ProjectId = projectId };
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateComplementPctAsync(int index, string? value)
+    {
+        var current = State.ComplementPayingProjects[index];
+        State.ComplementPayingProjects[index] = current with { Percentage = PayrollInputHelpers.ParseMoney(value) };
+        await OnChanged.InvokeAsync();
+    }
+}

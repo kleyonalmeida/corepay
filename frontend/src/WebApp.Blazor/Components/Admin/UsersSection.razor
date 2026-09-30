@@ -1,0 +1,396 @@
+@inject IUserApiService UserApiService
+@inject IRoleApiService RoleApiService
+@inject IDepartmentApiService DepartmentApiService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IAuthorizationService AuthorizationService
+
+<Card Class="settings-section-card">
+    <HeaderContent>
+        <SectionCardHeader Title="Usuários" Icon="IconKind.Users">
+            <Actions>
+                <AuthorizeView Policy="@AppPolicies.UsersWrite">
+                    <Authorized>
+                        <Button Size="ButtonSize.Sm"
+                                Disabled="@(!CanOpenForm)"
+                                OnClick="@OpenCreateDialogAsync">
+                            Novo usuário
+                        </Button>
+                    </Authorized>
+                </AuthorizeView>
+            </Actions>
+        </SectionCardHeader>
+    </HeaderContent>
+    <ChildContent>
+        @if (_isLoading)
+        {
+            <div class="settings-section__loading">
+                <Spinner Label="Carregando usuários..." />
+            </div>
+        }
+        else if (!string.IsNullOrWhiteSpace(_loadError))
+        {
+            <EmptyState Title="Erro ao carregar usuários" Description="@_loadError" />
+        }
+        else if (_users.Count == 0)
+        {
+            <EmptyState Title="Nenhum usuário cadastrado"
+                        Description="Crie o primeiro usuário para gerenciar papéis e setores." />
+        }
+        else
+        {
+            <div class="settings-table-wrapper">
+                <table class="settings-table">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>E-mail</th>
+                            <th>Papéis</th>
+                            <th>Setores</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var user in _users)
+                        {
+                            <tr>
+                                <td>@user.DisplayName</td>
+                                <td class="tabular-nums">@user.Email</td>
+                                <td>
+                                    <div class="settings-chip-list">
+                                        @foreach (var role in user.RoleNames)
+                                        {
+                                            <span class="settings-chip">@role</span>
+                                        }
+                                    </div>
+                                </td>
+                                <td>@FormatDepartments(user.DepartmentIds)</td>
+                                <td class="settings-table__actions">
+                                    <AuthorizeView Policy="@AppPolicies.UsersWrite">
+                                        <Authorized>
+                                            <div class="settings-table__action-group">
+                                                <Button Variant="ButtonVariant.Ghost"
+                                                        Size="ButtonSize.Sm"
+                                                        Disabled="@(!CanOpenForm)"
+                                                        OnClick="@(() => OpenEditDialogAsync(user))">
+                                                    Editar
+                                                </Button>
+                                                <Button Variant="ButtonVariant.Destructive"
+                                                        Size="ButtonSize.Sm"
+                                                        Disabled="@(!CanDeleteUser(user))"
+                                                        OnClick="@(() => OpenDeleteDialogAsync(user))">
+                                                    Excluir
+                                                </Button>
+                                            </div>
+                                        </Authorized>
+                                    </AuthorizeView>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        @if (_canWrite && !string.IsNullOrWhiteSpace(_catalogError))
+        {
+            <p class="settings-form__error settings-section__catalog-error" role="alert">@_catalogError</p>
+        }
+    </ChildContent>
+</Card>
+
+<UserFormDialog IsOpen="@_dialogOpen"
+                IsOpenChanged="@OnDialogOpenChangedAsync"
+                EditTarget="@_editTarget"
+                AvailableRoles="@_availableRoles"
+                AvailableDepartments="@_availableDepartments"
+                IsSaving="@_isSaving"
+                ErrorMessage="@_formError"
+                LockSuperAdminRole="@IsEditingSuperAdmin"
+                OnSubmit="@SaveAsync" />
+
+<Dialog IsOpen="@_deleteDialogOpen" IsOpenChanged="@OnDeleteDialogOpenChangedAsync" Title="Excluir usuário">
+    <div class="settings-form">
+        <p class="settings-form__hint">
+            Tem certeza que deseja excluir <strong>@_deleteTarget?.DisplayName</strong>?
+            Esta ação não pode ser desfeita.
+        </p>
+
+        @if (!string.IsNullOrWhiteSpace(_deleteError))
+        {
+            <p class="settings-form__error" role="alert">@_deleteError</p>
+        }
+
+        <div class="settings-form__actions">
+            <Button Variant="ButtonVariant.Outline"
+                    Disabled="@_isDeleting"
+                    OnClick="@CloseDeleteDialogAsync">
+                Cancelar
+            </Button>
+            <Button Variant="ButtonVariant.Destructive"
+                    Disabled="@_isDeleting"
+                    OnClick="@ConfirmDeleteAsync">
+                @(_isDeleting ? "Excluindo..." : "Excluir")
+            </Button>
+        </div>
+    </div>
+</Dialog>
+
+@code {
+    private readonly List<UserDto> _users = [];
+    private readonly List<RoleDto> _roles = [];
+    private readonly List<DepartmentDto> _departments = [];
+    private readonly Dictionary<Guid, string> _departmentNames = [];
+
+    private bool _isLoading = true;
+    private string? _loadError;
+    private string? _catalogError;
+    private bool _canWrite;
+    private bool _isActingSuperAdmin;
+    private string? _currentUserId;
+
+    private bool _dialogOpen;
+    private bool _isSaving;
+    private string? _formError;
+    private UserDto? _editTarget;
+
+    private bool _deleteDialogOpen;
+    private bool _isDeleting;
+    private string? _deleteError;
+    private UserDto? _deleteTarget;
+
+    private IReadOnlyList<RoleDto> _availableRoles => _roles
+        .Where(role => _isActingSuperAdmin
+            || !string.Equals(role.Name, AppRoles.SuperAdmin, StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    private IReadOnlyList<DepartmentDto> _availableDepartments => _departments;
+
+    private bool CanOpenForm => _canWrite && string.IsNullOrWhiteSpace(_catalogError);
+
+    private bool IsEditingSuperAdmin =>
+        _editTarget?.RoleNames.Contains(AppRoles.SuperAdmin, StringComparer.OrdinalIgnoreCase) == true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _currentUserId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        _isActingSuperAdmin = authState.User.IsInRole(AppRoles.SuperAdmin);
+
+        var writeAuthorization = await AuthorizationService.AuthorizeAsync(
+            authState.User,
+            AppPolicies.UsersWrite);
+        _canWrite = writeAuthorization.Succeeded;
+
+        await LoadUsersAsync();
+
+        if (_canWrite)
+        {
+            await LoadCatalogsAsync();
+        }
+    }
+
+    private async Task LoadUsersAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+
+        var result = await UserApiService.GetUsersAsync();
+        _users.Clear();
+
+        if (result.Status == UserApiStatus.Success && result.Users is not null)
+        {
+            _users.AddRange(result.Users.OrderBy(user => user.Email, StringComparer.OrdinalIgnoreCase));
+        }
+        else
+        {
+            _loadError = UserErrorMessages.ForList(result);
+        }
+
+        _isLoading = false;
+    }
+
+    private async Task LoadCatalogsAsync()
+    {
+        _catalogError = null;
+
+        var rolesTask = RoleApiService.GetRolesAsync();
+        var departmentsTask = DepartmentApiService.GetDepartmentsAsync();
+        await Task.WhenAll(rolesTask, departmentsTask);
+
+        var rolesResult = await rolesTask;
+        var departmentsResult = await departmentsTask;
+
+        _roles.Clear();
+        _departments.Clear();
+        _departmentNames.Clear();
+
+        if (rolesResult.Status != RoleApiStatus.Success || rolesResult.Roles is null)
+        {
+            _catalogError = "Não foi possível carregar os papéis.";
+            return;
+        }
+
+        if (departmentsResult.Status != DepartmentApiStatus.Success || departmentsResult.Departments is null)
+        {
+            _catalogError = "Não foi possível carregar os setores.";
+            return;
+        }
+
+        _roles.AddRange(rolesResult.Roles.OrderBy(role => role.Name, StringComparer.OrdinalIgnoreCase));
+        _departments.AddRange(departmentsResult.Departments.OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase));
+
+        foreach (var department in _departments)
+        {
+            _departmentNames[department.Id] = department.Name;
+        }
+    }
+
+    private string FormatDepartments(IReadOnlyList<Guid> departmentIds)
+    {
+        if (departmentIds.Count == 0)
+        {
+            return "—";
+        }
+
+        var names = departmentIds
+            .Select(id => _departmentNames.TryGetValue(id, out var name) ? name : id.ToString())
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase);
+
+        return string.Join(", ", names);
+    }
+
+    private bool CanDeleteUser(UserDto user)
+    {
+        if (!CanOpenForm)
+        {
+            return false;
+        }
+
+        if (string.Equals(user.Id, _currentUserId, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (user.RoleNames.Contains(AppRoles.SuperAdmin, StringComparer.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private Task OpenCreateDialogAsync()
+    {
+        _editTarget = null;
+        _formError = null;
+        _dialogOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private Task OpenEditDialogAsync(UserDto user)
+    {
+        _editTarget = user;
+        _formError = null;
+        _dialogOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private Task OnDialogOpenChangedAsync(bool isOpen)
+    {
+        _dialogOpen = isOpen;
+        if (!isOpen)
+        {
+            _editTarget = null;
+            _formError = null;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task SaveAsync(UserFormSubmit submit)
+    {
+        _isSaving = true;
+        _formError = null;
+
+        UserMutationResult result = _editTarget is null
+            ? await UserApiService.CreateUserAsync(new CreateUserRequest(
+                submit.Email,
+                submit.Password ?? string.Empty,
+                submit.DisplayName,
+                submit.RoleNames,
+                submit.DepartmentIds))
+            : await UserApiService.UpdateUserAsync(
+                _editTarget.Id,
+                new UpdateUserRequest(
+                    submit.Email,
+                    submit.DisplayName,
+                    submit.RoleNames,
+                    submit.DepartmentIds));
+
+        if (result.Status == UserApiStatus.Success && result.User is not null)
+        {
+            _dialogOpen = false;
+            _editTarget = null;
+            await LoadUsersAsync();
+        }
+        else
+        {
+            _formError = UserErrorMessages.ForMutation(result);
+        }
+
+        _isSaving = false;
+    }
+
+    private Task OpenDeleteDialogAsync(UserDto user)
+    {
+        _deleteTarget = user;
+        _deleteError = null;
+        _deleteDialogOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private Task OnDeleteDialogOpenChangedAsync(bool isOpen)
+    {
+        _deleteDialogOpen = isOpen;
+        if (!isOpen)
+        {
+            _deleteTarget = null;
+            _deleteError = null;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task CloseDeleteDialogAsync()
+    {
+        _deleteDialogOpen = false;
+        _deleteTarget = null;
+        _deleteError = null;
+        await Task.CompletedTask;
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_deleteTarget is null)
+        {
+            return;
+        }
+
+        _isDeleting = true;
+        _deleteError = null;
+
+        var result = await UserApiService.DeleteUserAsync(_deleteTarget.Id);
+        if (result.Status == UserApiStatus.Success)
+        {
+            _deleteDialogOpen = false;
+            _deleteTarget = null;
+            await LoadUsersAsync();
+        }
+        else
+        {
+            _deleteError = UserErrorMessages.ForDelete(result);
+        }
+
+        _isDeleting = false;
+    }
+}

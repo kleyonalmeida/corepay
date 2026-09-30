@@ -1,0 +1,39 @@
+@if (IsOpen)
+{
+    <div class="ui-dialog__overlay" @onclick="CloseAsync">
+        <div class="ui-dialog @(IsWide ? "ui-dialog--wide" : null)"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="@TitleId"
+             @onclick:stopPropagation="true">
+            <div class="ui-dialog__header">
+                <h2 id="@TitleId" class="ui-dialog__title">@Title</h2>
+                <button type="button"
+                        class="ui-dialog__close"
+                        aria-label="Fechar dialog"
+                        @onclick="CloseAsync">
+                    <Icon Kind="IconKind.X" />
+                </button>
+            </div>
+            <div class="ui-dialog__content">
+                @ChildContent
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public bool IsWide { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private string TitleId { get; } = $"dialog-title-{Guid.NewGuid():N}";
+
+    private async Task CloseAsync()
+    {
+        IsOpen = false;
+        await IsOpenChanged.InvokeAsync(false);
+    }
+}

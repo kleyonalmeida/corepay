@@ -1,0 +1,237 @@
+<Dialog IsOpen="@IsOpen" IsOpenChanged="@IsOpenChanged" Title="@DialogTitle" IsWide="true">
+    <div class="settings-form">
+        @if (!string.IsNullOrWhiteSpace(DisplayError))
+        {
+            <p class="settings-form__error" role="alert">@DisplayError</p>
+        }
+
+        <Input Label="Nome"
+               Placeholder="Nome de exibição"
+               Value="@_displayName"
+               ValueChanged="@(value => _displayName = value ?? string.Empty)" />
+
+        <Input Label="E-mail"
+               Type="email"
+               Placeholder="usuario@gruporoyalty.com"
+               Value="@_email"
+               ValueChanged="@(value => _email = value ?? string.Empty)" />
+
+        @if (EditTarget is null)
+        {
+            <Input Label="Senha"
+                   Type="password"
+                   Placeholder="Mínimo 8 caracteres"
+                   Value="@_password"
+                   ValueChanged="@(value => _password = value ?? string.Empty)" />
+        }
+
+        <fieldset class="settings-form__fieldset">
+            <legend class="settings-form__legend">Papéis</legend>
+            @if (AvailableRoles.Count == 0)
+            {
+                <p class="settings-form__hint">Nenhum papel disponível.</p>
+            }
+            else
+            {
+                <ul class="settings-checkbox-list">
+                    @foreach (var role in AvailableRoles)
+                    {
+                        var isLocked = IsRoleLocked(role.Name);
+                        <li class="settings-checkbox-list__item">
+                            <label class="settings-checkbox-list__label">
+                                <input type="checkbox"
+                                       class="settings-checkbox-list__input"
+                                       checked="@IsRoleSelected(role.Name)"
+                                       disabled="@(IsSaving || isLocked)"
+                                       @onchange="@(args => ToggleRole(role.Name, args))" />
+                                <span>@role.Name</span>
+                            </label>
+                        </li>
+                    }
+                </ul>
+            }
+        </fieldset>
+
+        <fieldset class="settings-form__fieldset">
+            <legend class="settings-form__legend">Setores</legend>
+            <p class="settings-form__hint">Obrigatório para gerentes. Outros papéis podem ficar sem setores.</p>
+            @if (AvailableDepartments.Count == 0)
+            {
+                <p class="settings-form__hint">Nenhum setor cadastrado.</p>
+            }
+            else
+            {
+                <ul class="settings-checkbox-list">
+                    @foreach (var department in AvailableDepartments)
+                    {
+                        <li class="settings-checkbox-list__item">
+                            <label class="settings-checkbox-list__label">
+                                <input type="checkbox"
+                                       class="settings-checkbox-list__input"
+                                       checked="@IsDepartmentSelected(department.Id)"
+                                       disabled="@IsSaving"
+                                       @onchange="@(args => ToggleDepartment(department.Id, args))" />
+                                <span>@department.Name</span>
+                            </label>
+                        </li>
+                    }
+                </ul>
+            }
+        </fieldset>
+
+        <FormDialogActions IsSaving="@IsSaving"
+                           SubmitLabel="@(IsSaving ? "Salvando..." : "Salvar")"
+                           OnSubmit="@SubmitAsync"
+                           OnCancel="@CancelAsync" />
+    </div>
+</Dialog>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+    [Parameter] public UserDto? EditTarget { get; set; }
+    [Parameter] public IReadOnlyList<RoleDto> AvailableRoles { get; set; } = [];
+    [Parameter] public IReadOnlyList<DepartmentDto> AvailableDepartments { get; set; } = [];
+    [Parameter] public bool IsSaving { get; set; }
+    [Parameter] public string? ErrorMessage { get; set; }
+    [Parameter] public bool LockSuperAdminRole { get; set; }
+    [Parameter] public EventCallback<UserFormSubmit> OnSubmit { get; set; }
+
+    private string _email = string.Empty;
+    private string _displayName = string.Empty;
+    private string _password = string.Empty;
+    private readonly HashSet<string> _selectedRoles = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<Guid> _selectedDepartments = [];
+    private string? _localError;
+
+    private string DialogTitle => EditTarget is null ? "Novo usuário" : "Editar usuário";
+    private string? DisplayError => _localError ?? ErrorMessage;
+
+    protected override void OnParametersSet()
+    {
+        if (!IsOpen)
+        {
+            return;
+        }
+
+        _localError = null;
+
+        if (EditTarget is null)
+        {
+            ResetForCreate();
+            return;
+        }
+
+        _email = EditTarget.Email;
+        _displayName = EditTarget.DisplayName;
+        _password = string.Empty;
+        _selectedRoles.Clear();
+        foreach (var role in EditTarget.RoleNames)
+        {
+            _selectedRoles.Add(role);
+        }
+
+        _selectedDepartments.Clear();
+        foreach (var departmentId in EditTarget.DepartmentIds)
+        {
+            _selectedDepartments.Add(departmentId);
+        }
+    }
+
+    private void ResetForCreate()
+    {
+        _email = string.Empty;
+        _displayName = string.Empty;
+        _password = string.Empty;
+        _selectedRoles.Clear();
+        _selectedDepartments.Clear();
+    }
+
+    private bool IsRoleSelected(string roleName) => _selectedRoles.Contains(roleName);
+
+    private bool IsDepartmentSelected(Guid departmentId) => _selectedDepartments.Contains(departmentId);
+
+    private bool IsRoleLocked(string roleName) =>
+        LockSuperAdminRole
+        && string.Equals(roleName, AppRoles.SuperAdmin, StringComparison.OrdinalIgnoreCase);
+
+    private void ToggleRole(string roleName, ChangeEventArgs args)
+    {
+        if (IsRoleLocked(roleName))
+        {
+            return;
+        }
+
+        var isChecked = args.Value is true;
+        if (isChecked)
+        {
+            _selectedRoles.Add(roleName);
+        }
+        else
+        {
+            _selectedRoles.Remove(roleName);
+        }
+    }
+
+    private void ToggleDepartment(Guid departmentId, ChangeEventArgs args)
+    {
+        var isChecked = args.Value is true;
+        if (isChecked)
+        {
+            _selectedDepartments.Add(departmentId);
+        }
+        else
+        {
+            _selectedDepartments.Remove(departmentId);
+        }
+    }
+
+    private async Task CancelAsync()
+    {
+        IsOpen = false;
+        await IsOpenChanged.InvokeAsync(false);
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_displayName))
+        {
+            _localError = "O nome é obrigatório.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_email))
+        {
+            _localError = "O e-mail é obrigatório.";
+            return;
+        }
+
+        if (EditTarget is null && string.IsNullOrWhiteSpace(_password))
+        {
+            _localError = "A senha é obrigatória.";
+            return;
+        }
+
+        if (_selectedRoles.Count == 0)
+        {
+            _localError = "Selecione ao menos um papel.";
+            return;
+        }
+
+        if (_selectedRoles.Contains(AppRoles.Manager, StringComparer.OrdinalIgnoreCase)
+            && _selectedDepartments.Count == 0)
+        {
+            _localError = "Gerentes devem ter ao menos um setor selecionado.";
+            return;
+        }
+
+        var submit = new UserFormSubmit(
+            _email.Trim(),
+            EditTarget is null ? _password : null,
+            _displayName.Trim(),
+            _selectedRoles.OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToList(),
+            _selectedDepartments.OrderBy(id => id).ToList());
+
+        await OnSubmit.InvokeAsync(submit);
+    }
+}

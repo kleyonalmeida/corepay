@@ -1,0 +1,156 @@
+@inject IPayrollApiService PayrollApi
+@implements IDisposable
+
+<div class="payroll-entry-editor">
+    <div class="payroll-entry-shell">
+        <div class="collaborators-table__identity">
+            <Avatar Name="@State.CollaboratorName" Size="AvatarSize.Sm" />
+            <div>
+                <p class="collaborators-table__name">@State.CollaboratorName</p>
+                <p class="collaborators-table__job-title">@(State.CareerLevelName ?? "—")</p>
+            </div>
+        </div>
+
+        <div class="payroll-entry-shell__meta">
+            <div>
+                <span class="payroll-entry-shell__label">Admissão</span>
+                <span>@DateFormatter.FormatDate(State.AdmissionDate)</span>
+            </div>
+            <div>
+                <span class="payroll-entry-shell__label">PIX</span>
+                <span class="text-pix-key">@(State.PixKey ?? "—")</span>
+            </div>
+            <div>
+                <span class="payroll-entry-shell__label">Salário base</span>
+                <span class="tabular-nums">@MoneyFormatter.FormatMoney(State.FullBaseSalary ?? 0m)</span>
+            </div>
+            <div>
+                <span class="payroll-entry-shell__label">Perfil</span>
+                <span>@CalculationProfileLabels.GetLabel(State.CalculationProfile)</span>
+            </div>
+        </div>
+
+        @if (CanRemove)
+        {
+            <Button Variant="ButtonVariant.Ghost"
+                    Size="ButtonSize.Sm"
+                    Disabled="@IsBusy"
+                    OnClick="@(() => OnRemove.InvokeAsync())">
+                Remover
+            </Button>
+        }
+    </div>
+
+    <div class="payroll-entry-editor__body">
+        @switch (State.CalculationProfile)
+        {
+            case CalculationProfile.CommercialAnalyst:
+                <CommercialAnalystEntryBlock State="State" Options="Options" OnChanged="@SchedulePreviewAsync" />
+                break;
+            case CalculationProfile.CommercialSupervisor:
+                <CommercialSupervisorEntryBlock State="State" Options="Options" OnChanged="@SchedulePreviewAsync" />
+                break;
+            case CalculationProfile.PaidTraffic:
+                <PaidTrafficEntryBlock State="State" Options="Options" OnChanged="@SchedulePreviewAsync" />
+                break;
+            case CalculationProfile.Management:
+                <ManagementEntryBlock State="State" Options="Options" OnChanged="@SchedulePreviewAsync" />
+                break;
+            case CalculationProfile.ProjectLeader:
+                <ProjectLeaderEntryBlock State="State" Options="Options" OnChanged="@SchedulePreviewAsync" />
+                break;
+            case CalculationProfile.Tipster:
+            case CalculationProfile.AllocatedFixed:
+            case CalculationProfile.FixedBonus:
+                <FixedBonusSectionEntryBlock State="State" Options="Options" OnChanged="@SchedulePreviewAsync" />
+                break;
+            case CalculationProfile.CommissionOnly:
+            case CalculationProfile.FixedCommission:
+            case CalculationProfile.FixedCommissionBonus:
+                <CommissionProfilesEntryBlock State="State" Options="Options" OnChanged="@SchedulePreviewAsync" />
+                break;
+        }
+
+        <PayrollBonusDeductionSection State="State" Options="Options" OnChanged="@SchedulePreviewAsync" />
+        <PayrollRoleChangeSection State="State" Options="Options" OnChanged="@SchedulePreviewAsync" />
+        <PayrollEntryTotalsFooter State="State" />
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PayrollEntryEditState State { get; set; } = default!;
+    [Parameter, EditorRequired] public PayrollEditorOptionsDto Options { get; set; } = default!;
+    [Parameter, EditorRequired] public Guid PayrollId { get; set; }
+    [Parameter] public bool CanRemove { get; set; } = true;
+    [Parameter] public bool IsBusy { get; set; }
+    [Parameter] public EventCallback OnRemove { get; set; }
+
+    private CancellationTokenSource? _debounceCts;
+    private CancellationTokenSource? _previewCts;
+
+    private Task SchedulePreviewAsync()
+    {
+        _debounceCts?.Cancel();
+        _debounceCts?.Dispose();
+        _debounceCts = new CancellationTokenSource();
+        var token = _debounceCts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(400, token);
+                await InvokeAsync(async () => await RunPreviewAsync());
+            }
+            catch (TaskCanceledException)
+            {
+            }
+        }, token);
+
+        return Task.CompletedTask;
+    }
+
+    private async Task RunPreviewAsync()
+    {
+        _previewCts?.Cancel();
+        _previewCts?.Dispose();
+        _previewCts = new CancellationTokenSource();
+        var token = _previewCts.Token;
+
+        State.IsCalculating = true;
+        State.PreviewError = null;
+
+        var result = await PayrollApi.PreviewEntryAsync(
+            PayrollId,
+            State.EntryId,
+            State.ToPreviewRequest(),
+            token);
+
+        if (token.IsCancellationRequested)
+        {
+            return;
+        }
+
+        State.IsCalculating = false;
+
+        if (result.Status == PayrollApiStatus.Success && result.Preview is not null)
+        {
+            State.LastResult = result.Preview.Result;
+            State.PreviewError = null;
+        }
+        else if (result.Status != PayrollApiStatus.Success)
+        {
+            State.PreviewError = PayrollErrorMessages.Translate(result.ErrorCode, result.Message);
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        _debounceCts?.Cancel();
+        _debounceCts?.Dispose();
+        _previewCts?.Cancel();
+        _previewCts?.Dispose();
+    }
+}

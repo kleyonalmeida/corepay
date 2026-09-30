@@ -1,0 +1,164 @@
+<Dialog IsOpen="@IsOpen" IsOpenChanged="@IsOpenChanged" Title="@DialogTitle" IsWide="true">
+    <div class="settings-form traffic-investment-form">
+        @if (!string.IsNullOrWhiteSpace(DisplayError))
+        {
+            <p class="settings-form__error" role="alert">@DisplayError</p>
+        }
+
+        @if (EditTarget is null)
+        {
+            <Select Label="Projeto"
+                    Value="@EditState.ProjectId"
+                    ValueChanged="@OnProjectChangedAsync"
+                    Disabled="@IsSaving">
+                <option value="">Selecione um projeto</option>
+                @foreach (var project in Projects.Where(project => project.IsActive).OrderBy(project => project.Name))
+                {
+                    <option value="@project.Id">@project.Name</option>
+                }
+            </Select>
+
+            <div class="traffic-investment-form__row">
+                <Select Label="Mês"
+                        Value="@EditState.MonthValue"
+                        ValueChanged="@OnMonthChangedAsync"
+                        Disabled="@IsSaving">
+                    @for (var month = 1; month <= 12; month++)
+                    {
+                        <option value="@month">@CompetenceFormatter.Format(month, 2000).Split('/')[0]</option>
+                    }
+                </Select>
+                <Select Label="Ano"
+                        Value="@EditState.YearValue"
+                        ValueChanged="@OnYearChangedAsync"
+                        Disabled="@IsSaving">
+                    @foreach (var year in YearOptions)
+                    {
+                        <option value="@year">@year</option>
+                    }
+                </Select>
+            </div>
+        }
+        else
+        {
+            <div class="traffic-investment-form__meta">
+                <span class="text-label">Projeto</span>
+                <span>@EditTarget.ProjectName</span>
+            </div>
+            <div class="traffic-investment-form__meta">
+                <span class="text-label">Competência</span>
+                <span>@CompetenceFormatter.Format(EditTarget.Month, EditTarget.Year)</span>
+            </div>
+        }
+
+        <Input Label="Meta mensal"
+               IsMoney="true"
+               Value="@EditState.MonthlyTarget"
+               ValueChanged="@(value => EditState.MonthlyTarget = value ?? "0")"
+               Disabled="@(!CanWrite || IsSaving)" />
+
+        @if (CalculatedTotals is not null)
+        {
+            <div class="traffic-investment-form__stats">
+                <StatCard Label="Solicitado" Value="@CalculatedTotals.RequestedAmount" Tone="SemanticTone.Yellow" />
+                <StatCard Label="Depositado" Value="@CalculatedTotals.DepositedAmount" Tone="SemanticTone.Emerald" />
+                <StatCard Label="Saldo" Value="@CalculatedTotals.Balance" Tone="SemanticTone.Emerald" />
+                <StatCard Label="Total" Value="@CalculatedTotals.TotalAmount" Tone="SemanticTone.Emerald" />
+                <StatCard Label="Gasto" Value="@CalculatedTotals.SpentAmount" Tone="SemanticTone.Purple" />
+                <StatCard Label="Imposto" Value="@CalculatedTotals.TaxAmount" Tone="SemanticTone.Orange" />
+            </div>
+        }
+
+        @foreach (var weekState in EditState.Weeks.OrderBy(week => week.WeekNumber))
+        {
+            <TrafficWeekPanel WeekNumber="@weekState.WeekNumber"
+                              State="@weekState"
+                              CalculatedWeek="@GetCalculatedWeek(weekState.WeekNumber)"
+                              CanWrite="@CanWrite"
+                              IsSaving="@IsSaving" />
+        }
+
+        <FormDialogActions IsSaving="@IsSaving"
+                           ShowSubmit="@CanWrite"
+                           SubmitLabel="@(IsSaving ? "Salvando..." : "Salvar")"
+                           OnSubmit="@SubmitAsync"
+                           OnCancel="@CancelAsync" />
+    </div>
+</Dialog>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+    [Parameter] public TrafficInvestmentDto? EditTarget { get; set; }
+    [Parameter] public IReadOnlyList<ProjectDto> Projects { get; set; } = [];
+    [Parameter] public int[] YearOptions { get; set; } = [];
+    [Parameter] public int DefaultMonth { get; set; } = 1;
+    [Parameter] public int DefaultYear { get; set; } = DateTime.UtcNow.Year;
+    [Parameter] public bool CanWrite { get; set; }
+    [Parameter] public bool IsSaving { get; set; }
+    [Parameter] public string? ErrorMessage { get; set; }
+    [Parameter] public EventCallback<TrafficInvestmentRequest> OnSubmit { get; set; }
+
+    private readonly TrafficInvestmentEditState EditState = new();
+    private string? _localError;
+
+    private string DialogTitle => EditTarget is null ? "Novo investimento" : "Editar investimento";
+    private string? DisplayError => _localError ?? ErrorMessage;
+    private TrafficInvestmentMonthlyTotalsDto? CalculatedTotals => EditTarget?.MonthlyTotals;
+
+    protected override void OnParametersSet()
+    {
+        if (!IsOpen)
+        {
+            return;
+        }
+
+        _localError = null;
+
+        if (EditTarget is null)
+        {
+            EditState.ResetForCreate(DefaultMonth, DefaultYear);
+            return;
+        }
+
+        EditState.LoadFromDto(EditTarget);
+    }
+
+    private TrafficWeekDto? GetCalculatedWeek(int weekNumber) =>
+        EditTarget?.Weeks.FirstOrDefault(week => week.WeekNumber == weekNumber);
+
+    private Task OnProjectChangedAsync(string? value)
+    {
+        EditState.ProjectId = value ?? string.Empty;
+        return Task.CompletedTask;
+    }
+
+    private Task OnMonthChangedAsync(string? value)
+    {
+        EditState.MonthValue = value ?? DefaultMonth.ToString();
+        return Task.CompletedTask;
+    }
+
+    private Task OnYearChangedAsync(string? value)
+    {
+        EditState.YearValue = value ?? DefaultYear.ToString();
+        return Task.CompletedTask;
+    }
+
+    private async Task CancelAsync()
+    {
+        IsOpen = false;
+        await IsOpenChanged.InvokeAsync(false);
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (!EditState.TryBuildRequest(out var request, out var error))
+        {
+            _localError = error;
+            return;
+        }
+
+        await OnSubmit.InvokeAsync(request!);
+    }
+}

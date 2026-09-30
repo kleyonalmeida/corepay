@@ -1,0 +1,127 @@
+@page "/login"
+@layout EmptyLayout
+@attribute [AllowAnonymous]
+@inject AuthService AuthService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Entrar — CorePay</PageTitle>
+
+<div class="auth-page">
+    <div class="auth-page__content">
+        <div class="auth-page__hero">
+            <div class="auth-page__icon-wrap" aria-hidden="true">
+                <Icon Kind="IconKind.DollarSign" Size="IconSize.AuthHero" />
+            </div>
+            <h1 class="text-auth-title">CorePay</h1>
+            <p class="auth-page__subtitle">Gestão de Pagamentos</p>
+        </div>
+
+        <Card Class="auth-card">
+            <EditForm Model="_model" OnValidSubmit="HandleSubmitAsync">
+                <div class="auth-form">
+                    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+                    {
+                        <div class="auth-error" role="alert">@_errorMessage</div>
+                    }
+
+                    <Input Label="E-mail"
+                           AuthLabel="true"
+                           Type="email"
+                           Placeholder="seu@email.com"
+                           Value="@_model.Email"
+                           ValueChanged="@(value => _model.Email = value ?? string.Empty)"
+                           AdditionalAttributes="@(new Dictionary<string, object> { ["autocomplete"] = "username" })" />
+
+                    <Input Label="Senha"
+                           AuthLabel="true"
+                           Type="password"
+                           Placeholder="••••••••"
+                           Value="@_model.Password"
+                           ValueChanged="@(value => _model.Password = value ?? string.Empty)"
+                           AdditionalAttributes="@(new Dictionary<string, object> { ["autocomplete"] = "current-password" })" />
+
+                    <Button Type="submit"
+                            Disabled="@_isSubmitting"
+                            AdditionalAttributes="@(new Dictionary<string, object> { ["class"] = "auth-submit" })">
+                        @(_isSubmitting ? "Entrando..." : "Entrar")
+                    </Button>
+                </div>
+            </EditForm>
+        </Card>
+    </div>
+</div>
+
+@code {
+    private readonly LoginFormModel _model = new();
+    private bool _isSubmitting;
+    private string? _errorMessage;
+
+    protected override void OnInitialized()
+    {
+        if (AuthService.IsAuthenticated)
+        {
+            NavigationManager.NavigateTo(GetReturnUrl(), replace: true);
+        }
+    }
+
+    private async Task HandleSubmitAsync()
+    {
+        _errorMessage = null;
+        _isSubmitting = true;
+
+        try
+        {
+            var result = await AuthService.LoginAsync(_model.Email, _model.Password);
+            if (!result.Succeeded)
+            {
+                _errorMessage = result.ErrorMessage;
+                return;
+            }
+
+            NavigationManager.NavigateTo(GetReturnUrl(), replace: true);
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private string GetReturnUrl()
+    {
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        var returnUrl = ParseReturnUrl(uri.Query);
+        if (string.IsNullOrWhiteSpace(returnUrl)
+            || !returnUrl.StartsWith('/')
+            || returnUrl.StartsWith("//", StringComparison.Ordinal))
+        {
+            return "/";
+        }
+
+        return returnUrl;
+    }
+
+    private static string? ParseReturnUrl(string query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return null;
+        }
+
+        foreach (var segment in query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = segment.Split('=', 2);
+            if (parts.Length == 2 && parts[0] == "returnUrl")
+            {
+                return Uri.UnescapeDataString(parts[1]);
+            }
+        }
+
+        return null;
+    }
+
+    private sealed class LoginFormModel
+    {
+        public string Email { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+    }
+}

@@ -1,0 +1,354 @@
+@inject ICollaboratorApiService CollaboratorApiService
+@inject IDepartmentApiService DepartmentApiService
+@inject ICareerLevelApiService CareerLevelApiService
+@inject IAuthorizationService AuthorizationService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<div class="collaborators-page">
+    <Card Class="collaborators-filters-card">
+        <ChildContent>
+            <div class="collaborators-filters">
+                <Input Label="Buscar"
+                       DebounceMs="400"
+                       Placeholder="Nome, cargo ou nível"
+                       Value="@_search"
+                       ValueChanged="@OnSearchChangedAsync"
+                       AdditionalAttributes="@SearchInputAttributes" />
+                <Select Label="Setor"
+                        Value="@_departmentFilter"
+                        ValueChanged="@OnDepartmentFilterChangedAsync"
+                        Disabled="@_isLoadingDepartments">
+                    <option value="">Todos os setores</option>
+                    @foreach (var department in _departments)
+                    {
+                        <option value="@department.Id">@department.Name</option>
+                    }
+                </Select>
+                <Select Label="Status"
+                        Value="@_statusFilter"
+                        ValueChanged="@OnStatusFilterChangedAsync">
+                    <option value="all">Todos</option>
+                    <option value="active">Ativos</option>
+                    <option value="inactive">Inativos</option>
+                </Select>
+            </div>
+        </ChildContent>
+    </Card>
+
+    <Card Class="collaborators-table-card">
+        <HeaderContent>
+            <SectionCardHeader Title="Colaboradores" Icon="IconKind.Users">
+                <Actions>
+                    @if (_canWrite)
+                    {
+                        <Button Size="ButtonSize.Sm" OnClick="@OpenCreateDialogAsync">
+                            Novo colaborador
+                        </Button>
+                    }
+                </Actions>
+            </SectionCardHeader>
+        </HeaderContent>
+        <ChildContent>
+            @if (_isLoading)
+            {
+                <div class="settings-section__loading">
+                    <Spinner Label="Carregando colaboradores..." />
+                </div>
+            }
+            else if (!string.IsNullOrWhiteSpace(_loadError))
+            {
+                <EmptyState Title="Erro ao carregar colaboradores" Description="@_loadError" />
+            }
+            else if (_collaborators.Count == 0)
+            {
+                <EmptyState Title="Nenhum colaborador encontrado"
+                            Description="@GetEmptyStateDescription()" />
+            }
+            else
+            {
+                <div class="settings-table-wrapper">
+                    <table class="settings-table collaborators-table">
+                        <thead>
+                            <tr>
+                                <th>Colaborador</th>
+                                <th>Nível</th>
+                                <th>Admissão</th>
+                                <th>Demissão</th>
+                                <th>PIX</th>
+                                <th class="collaborators-table__salary">Salário</th>
+                                <th>Status</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var collaborator in _collaborators)
+                            {
+                                <tr class="collaborators-table__row">
+                                    <td>
+                                        <div class="collaborators-table__identity">
+                                            <Avatar Name="@collaborator.Name"
+                                                    ImageUrl="@collaborator.PhotoUrl"
+                                                    Size="AvatarSize.Md" />
+                                            <div class="collaborators-table__identity-text">
+                                                <span class="collaborators-table__name">@collaborator.Name</span>
+                                                <span class="collaborators-table__job-title">
+                                                    @(string.IsNullOrWhiteSpace(collaborator.JobTitle) ? "—" : collaborator.JobTitle)
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>@(string.IsNullOrWhiteSpace(collaborator.CareerLevelName) ? "—" : collaborator.CareerLevelName)</td>
+                                    <td class="tabular-nums">@DateFormatter.FormatDate(collaborator.AdmissionDate)</td>
+                                    <td class="tabular-nums @GetDismissalClass(collaborator)">
+                                        @DateFormatter.FormatDate(collaborator.DismissalDate)
+                                    </td>
+                                    <td class="text-pix-key">@(string.IsNullOrWhiteSpace(collaborator.PixKey) ? "—" : collaborator.PixKey)</td>
+                                    <td class="collaborators-table__salary text-table-money tabular-nums">
+                                        @(collaborator.BaseSalary is null ? "—" : MoneyFormatter.FormatMoney(collaborator.BaseSalary.Value))
+                                    </td>
+                                    <td>
+                                        <StatusBadge Kind="@(collaborator.IsActive ? StatusKind.Active : StatusKind.Inactive)" />
+                                    </td>
+                                    <td class="settings-table__actions">
+                                        @if (_canWrite)
+                                        {
+                                            <div class="collaborators-table__row-action">
+                                                <Button Variant="ButtonVariant.Ghost"
+                                                        Size="ButtonSize.Sm"
+                                                        OnClick="@(() => HandleEditAsync(collaborator))">
+                                                    Editar
+                                                </Button>
+                                            </div>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <PaginationBar Page="@_page"
+                               TotalCount="@_totalCount"
+                               Disabled="@_isLoading"
+                               PageChanged="@OnPageChangedAsync" />
+            }
+        </ChildContent>
+    </Card>
+</div>
+
+<CollaboratorFormDialog IsOpen="@_dialogOpen"
+                        IsOpenChanged="@OnDialogOpenChangedAsync"
+                        EditTarget="@_editTarget"
+                        Departments="@_departments"
+                        CareerLevels="@_careerLevels"
+                        IsSaving="@_isSaving"
+                        ErrorMessage="@_formError"
+                        OnSubmit="@SaveAsync" />
+
+@code {
+    private readonly List<CollaboratorDto> _collaborators = [];
+    private readonly List<DepartmentDto> _departments = [];
+    private readonly List<CareerLevelDto> _careerLevels = [];
+
+    private bool _isLoading = true;
+    private bool _isLoadingDepartments = true;
+    private string? _loadError;
+    private bool _canWrite;
+    private bool _dialogOpen;
+    private bool _isSaving;
+    private string? _formError;
+    private CollaboratorDto? _editTarget;
+    private Guid? _editingCollaboratorId;
+
+    private string _search = string.Empty;
+    private string _departmentFilter = string.Empty;
+    private string _statusFilter = "all";
+    private int _page = 1;
+    private int _totalCount;
+
+    private static Dictionary<string, object> SearchInputAttributes => new()
+    {
+        ["autocomplete"] = "off"
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var writeAuthorization = await AuthorizationService.AuthorizeAsync(
+            authState.User,
+            AppPolicies.CollaboratorsWrite);
+        _canWrite = writeAuthorization.Succeeded;
+
+        await LoadDepartmentsAsync();
+        if (_canWrite)
+        {
+            await LoadCareerLevelsAsync();
+        }
+
+        await LoadCollaboratorsAsync();
+    }
+
+    private async Task LoadDepartmentsAsync()
+    {
+        _isLoadingDepartments = true;
+        _departments.Clear();
+
+        var result = await DepartmentApiService.GetDepartmentsAsync();
+        if (result.Status == DepartmentApiStatus.Success && result.Departments is not null)
+        {
+            _departments.AddRange(result.Departments.OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase));
+        }
+
+        _isLoadingDepartments = false;
+    }
+
+    private async Task LoadCareerLevelsAsync()
+    {
+        _careerLevels.Clear();
+
+        var result = await CareerLevelApiService.GetCareerLevelsAsync();
+        if (result.Status == CareerLevelApiStatus.Success && result.CareerLevels is not null)
+        {
+            _careerLevels.AddRange(result.CareerLevels.OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase));
+        }
+    }
+
+    private async Task LoadCollaboratorsAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+        _collaborators.Clear();
+
+        var query = new CollaboratorListQuery(
+            ParseDepartmentFilter(),
+            string.IsNullOrWhiteSpace(_search) ? null : _search.Trim(),
+            ParseStatusFilter(),
+            _page,
+            ListPagination.PageSize);
+
+        var result = await CollaboratorApiService.GetCollaboratorsAsync(query);
+        if (result.Status == CollaboratorApiStatus.Success && result.Collaborators is not null)
+        {
+            _collaborators.AddRange(result.Collaborators);
+            _totalCount = result.TotalCount;
+            _page = result.Page;
+        }
+        else
+        {
+            _loadError = CollaboratorErrorMessages.ForList(result);
+        }
+
+        _isLoading = false;
+    }
+
+    private Guid? ParseDepartmentFilter() =>
+        Guid.TryParse(_departmentFilter, out var departmentId) ? departmentId : null;
+
+    private bool? ParseStatusFilter() =>
+        _statusFilter switch
+        {
+            "active" => true,
+            "inactive" => false,
+            _ => null
+        };
+
+    private static string GetDismissalClass(CollaboratorDto collaborator) =>
+        !collaborator.IsActive && collaborator.DismissalDate is not null
+            ? "text-dismissal-date"
+            : string.Empty;
+
+    private string GetEmptyStateDescription() =>
+        _canWrite
+            ? "Ajuste os filtros ou cadastre um colaborador."
+            : "Ajuste os filtros para encontrar colaboradores.";
+
+    private async Task OnSearchChangedAsync(string? value)
+    {
+        _search = value ?? string.Empty;
+        _page = 1;
+        await LoadCollaboratorsAsync();
+    }
+
+    private async Task OnDepartmentFilterChangedAsync(string? value)
+    {
+        _departmentFilter = value ?? string.Empty;
+        _page = 1;
+        await LoadCollaboratorsAsync();
+    }
+
+    private async Task OnStatusFilterChangedAsync(string? value)
+    {
+        _statusFilter = string.IsNullOrWhiteSpace(value) ? "all" : value;
+        _page = 1;
+        await LoadCollaboratorsAsync();
+    }
+
+    private async Task OnPageChangedAsync(int page)
+    {
+        _page = page;
+        await LoadCollaboratorsAsync();
+    }
+
+    private Task OpenCreateDialogAsync()
+    {
+        _editTarget = null;
+        _editingCollaboratorId = null;
+        _formError = null;
+        _dialogOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private async Task HandleEditAsync(CollaboratorDto collaborator)
+    {
+        _formError = null;
+        _editingCollaboratorId = collaborator.Id;
+
+        var result = await CollaboratorApiService.GetCollaboratorByIdAsync(collaborator.Id);
+        if (result.Status != CollaboratorApiStatus.Success || result.Collaborator is null)
+        {
+            _formError = CollaboratorErrorMessages.ForGetById(result);
+            _editTarget = null;
+            _dialogOpen = true;
+            return;
+        }
+
+        _editTarget = result.Collaborator;
+        _dialogOpen = true;
+    }
+
+    private Task OnDialogOpenChangedAsync(bool isOpen)
+    {
+        _dialogOpen = isOpen;
+        if (!isOpen)
+        {
+            _editTarget = null;
+            _editingCollaboratorId = null;
+            _formError = null;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task SaveAsync(CollaboratorRequest request)
+    {
+        _isSaving = true;
+        _formError = null;
+
+        CollaboratorMutationResult result = _editingCollaboratorId is null
+            ? await CollaboratorApiService.CreateCollaboratorAsync(request)
+            : await CollaboratorApiService.UpdateCollaboratorAsync(_editingCollaboratorId.Value, request);
+
+        if (result.Status == CollaboratorApiStatus.Success && result.Collaborator is not null)
+        {
+            _dialogOpen = false;
+            _editTarget = null;
+            _editingCollaboratorId = null;
+            await LoadCollaboratorsAsync();
+        }
+        else
+        {
+            _formError = CollaboratorErrorMessages.ForMutation(result);
+        }
+
+        _isSaving = false;
+    }
+}

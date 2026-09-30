@@ -1,0 +1,94 @@
+<div class="payroll-nested-block">
+    <div class="payroll-nested-block__header">
+        <h3 class="payroll-nested-block__title">
+            @(State.CalculationProfile == CalculationProfile.FixedCommissionBonus ? "Affiliates" :
+              State.CalculationProfile == CalculationProfile.FixedCommission ? "Fixo + comissão" : "Comissão pura")
+        </h3>
+        <Button Variant="ButtonVariant.Outline" Size="ButtonSize.Sm" OnClick="@AddProjectAsync">
+            <Icon Kind="IconKind.Plus" Size="IconSize.Default" />
+            Projeto
+        </Button>
+    </div>
+
+    @if (State.CalculationProfile == CalculationProfile.FixedCommissionBonus)
+    {
+        <Input Label="Salário final (opcional)"
+               IsMoney="true"
+               Value="@(State.FinalSalary is null ? string.Empty : PayrollInputHelpers.FormatMoney(State.FinalSalary.Value))"
+               ValueChanged="@OnFinalSalaryChangedAsync" />
+    }
+
+    @if (State.CalculationProfile is CalculationProfile.FixedCommission or CalculationProfile.FixedCommissionBonus)
+    {
+        <GoalToggle Label="Meta atingida" Value="@(State.GoalTier != GoalTier.None)" ValueChanged="@OnGoalToggleAsync" />
+    }
+
+    @for (var i = 0; i < State.ProjectEntries.Count; i++)
+    {
+        var index = i;
+        var entry = State.ProjectEntries[index];
+        <div class="payroll-nested-block payroll-nested-block--inner">
+            <div class="payroll-nested-block__header">
+                <Select Label="Projeto" Value="@entry.ProjectId.ToString()" ValueChanged="@(v => UpdateProjectAsync(index, v))">
+                    @foreach (var option in Options.Projects)
+                    {
+                        <option value="@option.Id">@option.Name</option>
+                    }
+                </Select>
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Sm" OnClick="@(() => RemoveProjectAsync(index))">
+                    <Icon Kind="IconKind.Trash2" Size="IconSize.Default" />
+                </Button>
+            </div>
+            <Input Label="Faturamento" IsMoney="true" Value="@PayrollInputHelpers.FormatMoney(entry.Value)"
+                   ValueChanged="@(v => UpdateValueAsync(index, v))" />
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PayrollEntryEditState State { get; set; } = default!;
+    [Parameter, EditorRequired] public PayrollEditorOptionsDto Options { get; set; } = default!;
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private async Task OnGoalToggleAsync(bool value)
+    {
+        State.GoalTier = value ? GoalTier.Goal : GoalTier.None;
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task OnFinalSalaryChangedAsync(string? value)
+    {
+        State.FinalSalary = string.IsNullOrWhiteSpace(value) ? null : PayrollInputHelpers.ParseMoney(value);
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task AddProjectAsync()
+    {
+        var project = Options.Projects.FirstOrDefault();
+        if (project is null) return;
+        State.ProjectEntries.Add(new ProjectEntryDto(project.Id, 0m));
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task RemoveProjectAsync(int index)
+    {
+        State.ProjectEntries.RemoveAt(index);
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateProjectAsync(int index, string? value)
+    {
+        if (!Guid.TryParse(value, out var projectId)) return;
+        var current = State.ProjectEntries[index];
+        State.ProjectEntries[index] = current with { ProjectId = projectId };
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateValueAsync(int index, string? value)
+    {
+        var current = State.ProjectEntries[index];
+        State.ProjectEntries[index] = current with { Value = PayrollInputHelpers.ParseMoney(value) };
+        await OnChanged.InvokeAsync();
+    }
+
+}

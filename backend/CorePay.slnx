@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BuildingBlocks/BuildingBlocks.csproj" />
+    <Project Path="src/Core/Core.csproj" />
+    <Project Path="src/Infrastructure/Infrastructure.csproj" />
+    <Project Path="src/WebAPI/WebAPI.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BuildingBlocks.Tests/BuildingBlocks.Tests.csproj" />
+    <Project Path="tests/Core.Tests/Core.Tests.csproj" />
+    <Project Path="tests/WebAPI.Tests/WebAPI.Tests.csproj" />
+    <Project Path="tests/LegacyDataSeed.Tests/LegacyDataSeed.Tests.csproj" />
+  </Folder>
+</Solution>

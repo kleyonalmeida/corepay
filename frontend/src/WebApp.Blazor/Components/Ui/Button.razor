@@ -1,0 +1,65 @@
+<button type="@Type"
+        class="@CssClass"
+        disabled="@Disabled"
+        aria-label="@AriaLabel"
+        @onclick="HandleClickAsync"
+        @attributes="FilteredAttributes">
+    @ChildContent
+</button>
+
+@code {
+    [Parameter] public string Type { get; set; } = "button";
+    [Parameter] public ButtonVariant Variant { get; set; } = ButtonVariant.Default;
+    [Parameter] public ButtonSize Size { get; set; } = ButtonSize.Default;
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public string? AriaLabel { get; set; }
+    [Parameter] public EventCallback<MouseEventArgs> OnClick { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private IReadOnlyDictionary<string, object>? FilteredAttributes =>
+        AdditionalAttributes?.Where(static pair => !string.Equals(pair.Key, "class", StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(static pair => pair.Key, static pair => pair.Value);
+
+    private string CssClass => string.Join(' ', new[]
+    {
+        "ui-button",
+        Variant switch
+        {
+            ButtonVariant.Outline => "ui-button--outline",
+            ButtonVariant.Ghost => "ui-button--ghost",
+            ButtonVariant.Destructive => "ui-button--destructive",
+            ButtonVariant.Secondary => "ui-button--secondary",
+            _ => "ui-button--default"
+        },
+        Size switch
+        {
+            ButtonSize.Sm => "ui-button--sm",
+            ButtonSize.Icon => "ui-button--icon",
+            _ => "ui-button--md"
+        },
+        GetAdditionalClass()
+    }.Where(static c => !string.IsNullOrWhiteSpace(c)));
+
+    private string? GetAdditionalClass()
+    {
+        if (AdditionalAttributes is null)
+        {
+            return null;
+        }
+
+        return AdditionalAttributes.TryGetValue("class", out var value)
+            ? value?.ToString()
+            : null;
+    }
+
+    private async Task HandleClickAsync(MouseEventArgs args)
+    {
+        if (Disabled || string.Equals(Type, "submit", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        await OnClick.InvokeAsync(args);
+    }
+}

@@ -1,0 +1,66 @@
+@using WebApp.Blazor.Formatting
+
+@if (Payrolls.Count == 0)
+{
+    <Card Class="financial-content-card">
+        <ChildContent>
+            <EmptyState Title="Nenhum colaborador a pagar"
+                        Description="Ajuste os filtros para encontrar folhas com colaboradores elegíveis." />
+        </ChildContent>
+    </Card>
+}
+else
+{
+    @foreach (var payroll in Payrolls)
+    {
+        var isExpanded = ExpandedPayrollIds.Contains(payroll.Id);
+        <Card Class="@GetPayrollCardClass(payroll.Status)">
+            <ChildContent>
+                <button type="button"
+                        class="financial-payroll-card__header"
+                        aria-expanded="@isExpanded"
+                        @onclick="@(() => TogglePayroll(payroll.Id))">
+                    <Icon Kind="IconKind.ChevronRight"
+                          Size="IconSize.Default"
+                          Class="@($"financial-payroll-card__chevron {(isExpanded ? "financial-payroll-card__chevron--expanded" : null)}")" />
+                    <div class="financial-payroll-card__title-group">
+                        <span class="financial-payroll-card__title">@payroll.DepartmentName</span>
+                        <span class="financial-payroll-card__competence">
+                            @CompetenceFormatter.Format(payroll.Month, payroll.Year)
+                        </span>
+                    </div>
+                    <StatusBadge Kind="@PayrollStatusMapper.ToStatusKind(payroll.Status)" />
+                    <span class="financial-payroll-card__count">
+                        @payroll.Entries.Count @(payroll.Entries.Count == 1 ? "colaborador" : "colaboradores")
+                    </span>
+                </button>
+
+                @if (isExpanded)
+                {
+                    <div class="financial-payroll-card__body financial-project-cost-panel__body">
+                        @foreach (var entry in payroll.Entries)
+                        {
+                            <FinancialProjectCostEntryRow Entry="@entry"
+                                                          ProjectNames="@ProjectNames" />
+                        }
+                    </div>
+                }
+            </ChildContent>
+        </Card>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<FinancePayrollGroupDto> Payrolls { get; set; } = [];
+    [Parameter] public IReadOnlyDictionary<Guid, string> ProjectNames { get; set; } =
+        new Dictionary<Guid, string>();
+    [Parameter] public HashSet<Guid> ExpandedPayrollIds { get; set; } = [];
+    [Parameter] public EventCallback<Guid> OnTogglePayroll { get; set; }
+
+    private static string GetPayrollCardClass(string status) =>
+        status.Equals("paid", StringComparison.OrdinalIgnoreCase)
+            ? "financial-payroll-card financial-payroll-card--paid"
+            : "financial-payroll-card";
+
+    private async Task TogglePayroll(Guid payrollId) => await OnTogglePayroll.InvokeAsync(payrollId);
+}

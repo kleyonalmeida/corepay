@@ -1,0 +1,47 @@
+<div class="payroll-entry-totals">
+    @if (State.IsCalculating)
+    {
+        <div class="payroll-entry-totals__loading">
+            <Spinner />
+            <span>Calculando...</span>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(State.PreviewError))
+    {
+        <p class="settings-form__error" role="alert">@State.PreviewError</p>
+    }
+
+    @if (State.LastResult is not null)
+    {
+        <div class="payroll-entry-totals__grid">
+            <div>
+                <span class="payroll-entry-shell__label">Total</span>
+                <span class="payroll-entry-totals__total tabular-nums">@MoneyFormatter.FormatMoney(State.LastResult.TotalAmount)</span>
+            </div>
+            <div>
+                <span class="payroll-entry-shell__label">Fixo / complemento</span>
+                <span class="tabular-nums">@MoneyFormatter.FormatMoney(State.LastResult.BaseSalary)</span>
+            </div>
+            <div>
+                <span class="payroll-entry-shell__label">Comissão</span>
+                <span class="tabular-nums">@MoneyFormatter.FormatMoney(State.LastResult.CommissionAmount)</span>
+            </div>
+            @if (State.LastResult.PlatformTotal > 0)
+            {
+                <div>
+                    <span class="payroll-entry-shell__label">Plataforma</span>
+                    <span class="tabular-nums">@MoneyFormatter.FormatMoney(State.LastResult.PlatformTotal)</span>
+                </div>
+                <div>
+                    <span class="payroll-entry-shell__label">PIX empresa</span>
+                    <span class="tabular-nums">@MoneyFormatter.FormatMoney(State.LastResult.TotalAmount - State.LastResult.PlatformTotal)</span>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PayrollEntryEditState State { get; set; } = default!;
+}

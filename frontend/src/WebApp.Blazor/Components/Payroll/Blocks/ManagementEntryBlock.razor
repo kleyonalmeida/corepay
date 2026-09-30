@@ -1,0 +1,125 @@
+<div class="payroll-nested-block">
+    <div class="payroll-nested-block__header">
+        <h3 class="payroll-nested-block__title">Faturamento líquido</h3>
+        <Button Variant="ButtonVariant.Outline" Size="ButtonSize.Sm" OnClick="@AddRevenueAsync">
+            <Icon Kind="IconKind.Plus" Size="IconSize.Default" />
+            Registro
+        </Button>
+    </div>
+
+    <GoalToggle Label="Meta atingida" Value="@(State.GoalTier != GoalTier.None)" ValueChanged="@OnGoalToggleAsync" />
+
+    @for (var i = 0; i < State.ManagementRevenueEntries.Count; i++)
+    {
+        var index = i;
+        var entry = State.ManagementRevenueEntries[index];
+        <div class="payroll-nested-block payroll-nested-block--inner">
+            <div class="payroll-nested-block__header">
+                <Input Label="Faturamento líquido" IsMoney="true" Value="@PayrollInputHelpers.FormatMoney(entry.NetRevenue)"
+                       ValueChanged="@(v => UpdateRevenueAsync(index, v))" />
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Sm" OnClick="@(() => RemoveRevenueAsync(index))">
+                    <Icon Kind="IconKind.Trash2" Size="IconSize.Default" />
+                </Button>
+            </div>
+            <div class="payroll-nested-block__header">
+                <h4 class="payroll-nested-block__subtitle">Breakdown manual</h4>
+                <Button Variant="ButtonVariant.Outline" Size="ButtonSize.Sm" OnClick="@(() => AddBreakdownAsync(index))">
+                    <Icon Kind="IconKind.Plus" Size="IconSize.Default" />
+                    Projeto
+                </Button>
+            </div>
+            @if (entry.ProjectBreakdown is not null)
+            {
+                @for (var j = 0; j < entry.ProjectBreakdown.Count; j++)
+                {
+                    var bIndex = j;
+                    var breakdown = entry.ProjectBreakdown[bIndex];
+                    <div class="payroll-nested-block__row">
+                        <Select Label="Projeto" Value="@breakdown.ProjectId.ToString()" ValueChanged="@(v => UpdateBreakdownProjectAsync(index, bIndex, v))">
+                            @foreach (var option in Options.Projects)
+                            {
+                                <option value="@option.Id">@option.Name</option>
+                            }
+                        </Select>
+                        <Input Label="Valor" IsMoney="true" Value="@PayrollInputHelpers.FormatMoney(breakdown.Amount)"
+                               ValueChanged="@(v => UpdateBreakdownAmountAsync(index, bIndex, v))" />
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Sm" OnClick="@(() => RemoveBreakdownAsync(index, bIndex))">
+                            <Icon Kind="IconKind.Trash2" Size="IconSize.Default" />
+                        </Button>
+                    </div>
+                }
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PayrollEntryEditState State { get; set; } = default!;
+    [Parameter, EditorRequired] public PayrollEditorOptionsDto Options { get; set; } = default!;
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private async Task OnGoalToggleAsync(bool value)
+    {
+        State.GoalTier = value ? GoalTier.Goal : GoalTier.None;
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task AddRevenueAsync()
+    {
+        State.ManagementRevenueEntries.Add(new ManagementRevenueEntryDto(0m, []));
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task RemoveRevenueAsync(int index)
+    {
+        State.ManagementRevenueEntries.RemoveAt(index);
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateRevenueAsync(int index, string? value)
+    {
+        var current = State.ManagementRevenueEntries[index];
+        State.ManagementRevenueEntries[index] = current with { NetRevenue = PayrollInputHelpers.ParseMoney(value) };
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task AddBreakdownAsync(int revenueIndex)
+    {
+        var project = Options.Projects.FirstOrDefault();
+        if (project is null) return;
+        var current = State.ManagementRevenueEntries[revenueIndex];
+        var breakdown = current.ProjectBreakdown?.ToList() ?? [];
+        breakdown.Add(new ManagementProjectBreakdownDto(project.Id, 0m));
+        State.ManagementRevenueEntries[revenueIndex] = current with { ProjectBreakdown = breakdown };
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task RemoveBreakdownAsync(int revenueIndex, int breakdownIndex)
+    {
+        var current = State.ManagementRevenueEntries[revenueIndex];
+        var breakdown = current.ProjectBreakdown!.ToList();
+        breakdown.RemoveAt(breakdownIndex);
+        State.ManagementRevenueEntries[revenueIndex] = current with { ProjectBreakdown = breakdown };
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateBreakdownProjectAsync(int revenueIndex, int breakdownIndex, string? value)
+    {
+        if (!Guid.TryParse(value, out var projectId)) return;
+        var current = State.ManagementRevenueEntries[revenueIndex];
+        var breakdown = current.ProjectBreakdown!.ToList();
+        breakdown[breakdownIndex] = breakdown[breakdownIndex] with { ProjectId = projectId };
+        State.ManagementRevenueEntries[revenueIndex] = current with { ProjectBreakdown = breakdown };
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateBreakdownAmountAsync(int revenueIndex, int breakdownIndex, string? value)
+    {
+        var current = State.ManagementRevenueEntries[revenueIndex];
+        var breakdown = current.ProjectBreakdown!.ToList();
+        breakdown[breakdownIndex] = breakdown[breakdownIndex] with { Amount = PayrollInputHelpers.ParseMoney(value) };
+        State.ManagementRevenueEntries[revenueIndex] = current with { ProjectBreakdown = breakdown };
+        await OnChanged.InvokeAsync();
+    }
+
+}

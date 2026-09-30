@@ -1,0 +1,400 @@
+@using WebApp.Blazor.Formatting
+@inject IReportsApiService ReportsApiService
+@inject IFileDownloadService FileDownloadService
+
+<section class="reports-section">
+    @if (!string.IsNullOrWhiteSpace(_exportError))
+    {
+        <div class="reports-action-error" role="alert">@_exportError</div>
+    }
+
+    <div class="reports-toolbar">
+        <Button Variant="ButtonVariant.Outline"
+                Size="ButtonSize.Sm"
+                Disabled="@(!CanExport)"
+                OnClick="@ExportReportAsync">
+            <Icon Kind="IconKind.Download" />
+            @(_isExporting ? "Exportando..." : "Exportar Excel")
+        </Button>
+    </div>
+
+    <Card Class="reports-filters-card">
+        <ChildContent>
+            <div class="reports-filters">
+                <Select Label="Ano"
+                        Value="@_yearFilter"
+                        ValueChanged="@OnYearFilterChangedAsync"
+                        Disabled="@_isLoading">
+                    @foreach (var year in _yearOptions)
+                    {
+                        <option value="@year">@year</option>
+                    }
+                </Select>
+                <Select Label="Setor"
+                        Value="@_departmentFilter"
+                        ValueChanged="@OnDepartmentFilterChangedAsync"
+                        Disabled="@_isLoading">
+                    <option value="">Todos</option>
+                    @foreach (var department in _departmentOptions)
+                    {
+                        <option value="@department.Id">@department.Name</option>
+                    }
+                </Select>
+                <Select Label="Projeto"
+                        Value="@_projectFilter"
+                        ValueChanged="@OnProjectFilterChangedAsync"
+                        Disabled="@_isLoading">
+                    <option value="">Todos</option>
+                    @foreach (var project in _projectOptions)
+                    {
+                        <option value="@project.Id">@project.Name</option>
+                    }
+                </Select>
+            </div>
+        </ChildContent>
+    </Card>
+
+    @if (_isLoading)
+    {
+        <div class="settings-section__loading">
+            <Spinner Label="Carregando relatório..." />
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(_loadError))
+    {
+        <EmptyState Title="Erro ao carregar relatório" Description="@_loadError" />
+    }
+    else if (_report is null || IsEmptyReport(_report))
+    {
+        <EmptyState Title="Nenhum dado no período"
+                    Description="Não há folhas elegíveis para os filtros selecionados." />
+    }
+    else
+    {
+        <div class="reports-stats-grid">
+            <StatCard Label="Total do ano"
+                      Value="@_report.Summary.TotalYear"
+                      Tone="SemanticTone.Primary" />
+            <StatCard Label="Média mensal"
+                      Value="@_report.Summary.MonthlyAverage"
+                      Tone="SemanticTone.Blue" />
+            <StatCard Label="Maior setor"
+                      Value="@_report.Summary.TopDepartmentAmount"
+                      Subtitle="@_report.Summary.TopDepartmentName"
+                      Tone="SemanticTone.Emerald" />
+            <StatCard Label="Maior projeto"
+                      Value="@_report.Summary.TopProjectAmount"
+                      Subtitle="@_report.Summary.TopProjectName"
+                      Tone="SemanticTone.Purple" />
+            <StatCard Label="Colaboradores"
+                      ValueText="@_report.Summary.CollaboratorCount.ToString()"
+                      Tone="SemanticTone.Yellow" />
+        </div>
+
+        <div class="reports-charts-grid">
+            <Card Class="reports-chart-card">
+                <HeaderContent>
+                    <SectionCardHeader Title="Evolução mensal" Icon="IconKind.TrendingUp" />
+                </HeaderContent>
+                <ChildContent>
+                    <ReportsBarChart Items="@_monthlyChartItems"
+                                     AriaLabel="Evolução mensal do total bruto da folha" />
+                </ChildContent>
+            </Card>
+
+            <Card Class="reports-chart-card">
+                <HeaderContent>
+                    <SectionCardHeader Title="Distribuição por setor" Icon="IconKind.BarChart3" />
+                </HeaderContent>
+                <ChildContent>
+                    <ReportsBarChart Items="@_departmentChartItems"
+                                     AriaLabel="Distribuição do total bruto por setor" />
+                </ChildContent>
+            </Card>
+        </div>
+
+        <Card Class="reports-table-card">
+            <HeaderContent>
+                <Tabs Items="@TabItems"
+                      ActiveTab="@_activeTab"
+                      ActiveTabChanged="@OnTabChangedAsync"
+                      AriaLabel="Matrizes do relatório" />
+            </HeaderContent>
+            <ChildContent>
+                @if (_activeTab == 0)
+                {
+                    @if (_report.ByDepartment.Count == 0)
+                    {
+                        <EmptyState Title="Nenhum setor no período"
+                                    Description="Ajuste os filtros para visualizar os dados." />
+                    }
+                    else
+                    {
+                        <div class="settings-table-wrapper">
+                            <table class="settings-table reports-table">
+                                <thead>
+                                    <tr>
+                                        <th>Setor</th>
+                                        <th class="reports-table__money">Total</th>
+                                        <th class="reports-table__count">Linhas</th>
+                                        <th class="reports-table__count">Folhas de pagamento</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var row in _report.ByDepartment)
+                                    {
+                                        <tr>
+                                            <td>@row.DepartmentName</td>
+                                            <td class="reports-table__money text-table-money tabular-nums">
+                                                @MoneyFormatter.FormatMoney(row.Amount)
+                                            </td>
+                                            <td class="reports-table__count tabular-nums">@row.EntryCount</td>
+                                            <td class="reports-table__count tabular-nums">@row.PayrollCount</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                }
+                else if (_activeTab == 1)
+                {
+                    @if (_report.ByProject.Count == 0)
+                    {
+                        <EmptyState Title="Nenhum projeto no período"
+                                    Description="Ajuste os filtros para visualizar os dados." />
+                    }
+                    else
+                    {
+                        <div class="settings-table-wrapper">
+                            <table class="settings-table reports-table">
+                                <thead>
+                                    <tr>
+                                        <th>Projeto</th>
+                                        <th class="reports-table__money">Total</th>
+                                        <th class="reports-table__count">Linhas</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var row in _report.ByProject)
+                                    {
+                                        <tr>
+                                            <td>@row.ProjectName</td>
+                                            <td class="reports-table__money text-table-money tabular-nums">
+                                                @MoneyFormatter.FormatMoney(row.Amount)
+                                            </td>
+                                            <td class="reports-table__count tabular-nums">@row.EntryCount</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                }
+                else
+                {
+                    @if (_report.ByCollaborator.Count == 0)
+                    {
+                        <EmptyState Title="Nenhum colaborador no período"
+                                    Description="Ajuste os filtros para visualizar os dados." />
+                    }
+                    else
+                    {
+                        <div class="settings-table-wrapper">
+                            <table class="settings-table reports-table">
+                                <thead>
+                                    <tr>
+                                        <th>Colaborador</th>
+                                        <th>Setor</th>
+                                        <th class="reports-table__money">Total</th>
+                                        <th class="reports-table__count">Competências</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var row in _report.ByCollaborator)
+                                    {
+                                        <tr>
+                                            <td>@row.CollaboratorName</td>
+                                            <td>@row.DepartmentName</td>
+                                            <td class="reports-table__money text-table-money tabular-nums">
+                                                @MoneyFormatter.FormatMoney(row.Amount)
+                                            </td>
+                                            <td class="reports-table__count tabular-nums">@row.CompetenceCount</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                }
+            </ChildContent>
+        </Card>
+    }
+</section>
+
+@code {
+    private static readonly string[] TabItems = ["Por setor", "Por projeto", "Por colaborador"];
+
+    private readonly List<ReportsFilterOptionDto> _departmentOptions = [];
+    private readonly List<ReportsFilterOptionDto> _projectOptions = [];
+    private readonly List<ReportsBarChart.ReportsBarChartItem> _monthlyChartItems = [];
+    private readonly List<ReportsBarChart.ReportsBarChartItem> _departmentChartItems = [];
+
+    private ReportsDto? _report;
+    private bool _isLoading = true;
+    private bool _isExporting;
+    private string? _loadError;
+    private string? _exportError;
+    private int _activeTab;
+    private string _yearFilter = string.Empty;
+    private string _departmentFilter = string.Empty;
+    private string _projectFilter = string.Empty;
+    private int[] _yearOptions = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _yearOptions = BuildYearOptions();
+        await LoadReportAsync(initialLoad: true);
+    }
+
+    private static int[] BuildYearOptions()
+    {
+        var currentYear = PayrollCompetenceDefaults.CurrentCompetence().Year;
+        return Enumerable.Range(currentYear - 2, 5).Reverse().ToArray();
+    }
+
+    private async Task LoadReportAsync(bool initialLoad = false)
+    {
+        _isLoading = true;
+        _loadError = null;
+
+        if (initialLoad && string.IsNullOrWhiteSpace(_yearFilter))
+        {
+            _yearFilter = PayrollCompetenceDefaults.CurrentCompetence().Year.ToString();
+        }
+
+        var query = BuildQuery();
+        var result = await ReportsApiService.GetPayrollReportAsync(query);
+        if (result.Status == ReportsApiStatus.Success && result.Data is not null)
+        {
+            _report = result.Data;
+            if (initialLoad)
+            {
+                _yearFilter = _report.Year.ToString();
+            }
+
+            ApplyFilterOptions(_report.FilterOptions);
+            BuildChartItems(_report);
+        }
+        else
+        {
+            _report = null;
+            _loadError = ReportsErrorMessages.ForReport(result);
+        }
+
+        _isLoading = false;
+    }
+
+    private ReportsQuery BuildQuery()
+    {
+        int? year = int.TryParse(_yearFilter, out var parsedYear) ? parsedYear : null;
+        Guid? departmentId = Guid.TryParse(_departmentFilter, out var parsedDepartment) ? parsedDepartment : null;
+        Guid? projectId = Guid.TryParse(_projectFilter, out var parsedProject) ? parsedProject : null;
+        return new ReportsQuery(year, departmentId, projectId);
+    }
+
+    private void ApplyFilterOptions(ReportsFilterOptionsDto filterOptions)
+    {
+        _departmentOptions.Clear();
+        _departmentOptions.AddRange(filterOptions.Departments);
+        _projectOptions.Clear();
+        _projectOptions.AddRange(filterOptions.Projects);
+    }
+
+    private void BuildChartItems(ReportsDto report)
+    {
+        _monthlyChartItems.Clear();
+        foreach (var point in report.MonthlySeries)
+        {
+            var monthLabel = CompetenceFormatter.Format(point.Month, report.Year).Split('/')[0];
+            var colorIndex = ((point.Month - 1) % 5) + 1;
+            _monthlyChartItems.Add(new ReportsBarChart.ReportsBarChartItem(monthLabel, point.Amount, colorIndex));
+        }
+
+        _departmentChartItems.Clear();
+        var topDepartments = report.ByDepartment.Take(5).ToList();
+        for (var index = 0; index < topDepartments.Count; index++)
+        {
+            var row = topDepartments[index];
+            _departmentChartItems.Add(new ReportsBarChart.ReportsBarChartItem(
+                row.DepartmentName,
+                row.Amount,
+                (index % 5) + 1));
+        }
+    }
+
+    private static bool IsEmptyReport(ReportsDto report) =>
+        report.Summary.TotalYear == 0m
+        && report.ByDepartment.Count == 0
+        && report.ByProject.Count == 0
+        && report.ByCollaborator.Count == 0;
+
+    private bool CanExport =>
+        !_isLoading
+        && !_isExporting
+        && _report is not null
+        && !IsEmptyReport(_report);
+
+    private async Task ExportReportAsync()
+    {
+        if (!CanExport)
+        {
+            return;
+        }
+
+        _isExporting = true;
+        _exportError = null;
+
+        var result = await ReportsApiService.ExportPayrollReportAsync(BuildQuery());
+        if (result.Status == ReportsApiStatus.Success
+            && result.FileBytes is not null
+            && !string.IsNullOrWhiteSpace(result.FileName)
+            && !string.IsNullOrWhiteSpace(result.ContentType))
+        {
+            await FileDownloadService.SaveFileAsync(
+                result.FileBytes,
+                result.FileName,
+                result.ContentType);
+        }
+        else
+        {
+            _exportError = ReportsErrorMessages.ForExport(result);
+        }
+
+        _isExporting = false;
+    }
+
+    private async Task OnYearFilterChangedAsync(string? value)
+    {
+        _yearFilter = value ?? string.Empty;
+        await LoadReportAsync();
+    }
+
+    private async Task OnDepartmentFilterChangedAsync(string? value)
+    {
+        _departmentFilter = value ?? string.Empty;
+        await LoadReportAsync();
+    }
+
+    private async Task OnProjectFilterChangedAsync(string? value)
+    {
+        _projectFilter = value ?? string.Empty;
+        await LoadReportAsync();
+    }
+
+    private Task OnTabChangedAsync(int tab)
+    {
+        _activeTab = tab;
+        return Task.CompletedTask;
+    }
+}

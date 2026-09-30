@@ -1,0 +1,22 @@
+﻿@page "/"
+@attribute [Authorize]
+
+<PageTitle>CorePay</PageTitle>
+
+<div class="dashboard-page">
+    <header class="dashboard-page__header">
+        <div>
+            <h1 class="text-page-title">Dashboard</h1>
+            @if (AuthService.CurrentSession is not null)
+            {
+                <p class="text-page-subtitle">Olá, @AuthService.CurrentSession.User.DisplayName</p>
+            }
+        </div>
+    </header>
+
+    <DashboardSection />
+</div>
+
+@code {
+    [Inject] private AuthService AuthService { get; set; } = default!;
+}

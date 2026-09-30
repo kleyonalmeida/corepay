@@ -1,0 +1,23 @@
+<div class="empty-state">
+    <div class="empty-state__icon" aria-hidden="true">
+        @if (IconContent is not null)
+        {
+            @IconContent
+        }
+        else
+        {
+            <Icon Kind="IconKind.Search" Size="IconSize.EmptyState" />
+        }
+    </div>
+    <h3 class="text-empty-title">@Title</h3>
+    @if (!string.IsNullOrWhiteSpace(Description))
+    {
+        <p class="empty-state__description">@Description</p>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public RenderFragment? IconContent { get; set; }
+}

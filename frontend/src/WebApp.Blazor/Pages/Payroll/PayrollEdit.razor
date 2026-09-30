@@ -1,0 +1,16 @@
+@page "/payrolls/{Id:guid}/edit"
+@attribute [Authorize(Policy = AppPolicies.PayrollsWrite)]
+
+<PageTitle>Editar folha — CorePay</PageTitle>
+
+<PayrollResourceGuard Id="@Id">
+    <ChildContent Context="payroll">
+        <PayrollEditabilityGuard PayrollId="@Id" Status="@payroll.Status">
+            <PayrollFormShell Mode="PayrollFormMode.Edit" PayrollId="@Id" InitialPayroll="@payroll" />
+        </PayrollEditabilityGuard>
+    </ChildContent>
+</PayrollResourceGuard>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+}

@@ -1,0 +1,139 @@
+@inject NotificationState NotificationState
+@inject NavigationManager NavigationManager
+
+<section class="notifications-section">
+    @if (_isLoading)
+    {
+        <Card Class="notifications-section__card">
+            <ChildContent>
+                <div class="settings-section__loading">
+                    <Spinner Label="Carregando notificações..." />
+                </div>
+            </ChildContent>
+        </Card>
+    }
+    else if (!string.IsNullOrWhiteSpace(_loadError))
+    {
+        <Card Class="notifications-section__card">
+            <ChildContent>
+                <EmptyState Title="Erro ao carregar notificações" Description="@_loadError" />
+            </ChildContent>
+        </Card>
+    }
+    else if (_items.Count == 0)
+    {
+        <Card Class="notifications-section__card">
+            <ChildContent>
+                <EmptyState Title="Nenhuma notificação"
+                            Description="Você será avisado quando houver eventos de folha." />
+            </ChildContent>
+        </Card>
+    }
+    else
+    {
+        <Card Class="notifications-section__card">
+            <ChildContent>
+                <div class="notifications-list">
+                    @foreach (var notification in _items)
+                    {
+                        <NotificationRow Notification="notification"
+                                           OnOpen="HandleOpenAsync"
+                                           OnMarkRead="HandleMarkReadAsync" />
+                    }
+                </div>
+                <PaginationBar Page="@_page"
+                               TotalCount="@_totalCount"
+                               Disabled="@_isLoading"
+                               PageChanged="@OnPageChangedAsync" />
+            </ChildContent>
+        </Card>
+    }
+</section>
+
+@code {
+    private IReadOnlyList<NotificationDto> _items = [];
+    private bool _isLoading = true;
+    private string? _loadError;
+    private int _page = 1;
+    private int _totalCount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        NotificationState.StateChanged += HandleStateChanged;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+        try
+        {
+            var result = await NotificationState.LoadAsync(_page);
+            if (result.Status != NotificationApiStatus.Success || result.Data is null)
+            {
+                _items = [];
+                _totalCount = 0;
+                _loadError = NotificationErrorMessages.ForLoad(result);
+                return;
+            }
+
+            _items = result.Data.Items;
+            _totalCount = result.Data.TotalCount;
+            _page = result.Data.Page;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task HandleOpenAsync(NotificationDto notification)
+    {
+        if (!notification.IsRead)
+        {
+            await NotificationState.MarkReadAsync(notification.Id);
+            _items = NotificationState.Items;
+        }
+
+        NavigationManager.NavigateTo($"/payrolls/{notification.PayrollId}");
+    }
+
+    private async Task HandleMarkReadAsync(NotificationDto notification)
+    {
+        if (notification.IsRead)
+        {
+            return;
+        }
+
+        var success = await NotificationState.MarkReadAsync(notification.Id);
+        if (!success)
+        {
+            _loadError = "Não foi possível marcar a notificação como lida.";
+            return;
+        }
+
+        _items = NotificationState.Items;
+    }
+
+    private async Task OnPageChangedAsync(int page)
+    {
+        _page = page;
+        await LoadAsync();
+    }
+
+    private void HandleStateChanged()
+    {
+        _items = NotificationState.Items;
+        _totalCount = NotificationState.TotalCount;
+        _page = NotificationState.Page;
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        NotificationState.StateChanged -= HandleStateChanged;
+    }
+}
+
+@implements IDisposable

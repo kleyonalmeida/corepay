@@ -1,0 +1,13 @@
+@page "/financial"
+@attribute [Authorize(Policy = AppPolicies.FinanceRead)]
+
+<PageTitle>Financeiro — CorePay</PageTitle>
+
+<div class="financial-page-header">
+    <div>
+        <h1 class="text-page-title">Financeiro</h1>
+        <p class="text-page-subtitle">Consulte colaboradores elegíveis para pagamento e custo por projeto por competência.</p>
+    </div>
+</div>
+
+<FinancialSection />

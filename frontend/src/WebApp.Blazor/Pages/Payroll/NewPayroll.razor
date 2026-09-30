@@ -1,0 +1,6 @@
+@page "/payrolls/new"
+@attribute [Authorize(Policy = AppPolicies.PayrollsWrite)]
+
+<PageTitle>Nova folha — CorePay</PageTitle>
+
+<PayrollFormShell Mode="PayrollFormMode.Create" />

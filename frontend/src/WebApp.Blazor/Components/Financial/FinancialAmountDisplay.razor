@@ -1,0 +1,13 @@
+<div class="financial-amount">
+    @if (PlatformTotal > 0)
+    {
+        <span class="financial-amount__gross tabular-nums">@MoneyFormatter.FormatMoney(TotalAmount)</span>
+    }
+    <span class="financial-amount__receive tabular-nums">@MoneyFormatter.FormatMoney(AmountToReceive)</span>
+</div>
+
+@code {
+    [Parameter] public decimal TotalAmount { get; set; }
+    [Parameter] public decimal PlatformTotal { get; set; }
+    [Parameter] public decimal AmountToReceive { get; set; }
+}

@@ -1,0 +1,152 @@
+<div class="payroll-nested-block">
+    <div class="payroll-nested-block__header">
+        <h3 class="payroll-nested-block__title">
+            @(State.CalculationProfile == CalculationProfile.Tipster ? "Tipster" :
+              State.CalculationProfile == CalculationProfile.AllocatedFixed ? "Rateado" : "Fixo + bônus")
+        </h3>
+        <Button Variant="ButtonVariant.Outline" Size="ButtonSize.Sm" OnClick="@AddProjectAsync">
+            <Icon Kind="IconKind.Plus" Size="IconSize.Default" />
+            Projeto
+        </Button>
+    </div>
+
+    <GoalToggle Label="Meta atingida" Value="@(State.GoalTier != GoalTier.None)" ValueChanged="@OnGoalToggleAsync" />
+
+    @if (State.CalculationProfile == CalculationProfile.AllocatedFixed)
+    {
+        <div class="payroll-nested-block payroll-nested-block--inner">
+            <div class="payroll-nested-block__header">
+                <h4 class="payroll-nested-block__subtitle">Rateio por projeto</h4>
+                <Button Variant="ButtonVariant.Outline" Size="ButtonSize.Sm" OnClick="@AddRateioAsync">
+                    <Icon Kind="IconKind.Plus" Size="IconSize.Default" />
+                    Rateio
+                </Button>
+            </div>
+            @for (var i = 0; i < State.RateioProjectEntries.Count; i++)
+            {
+                var index = i;
+                var entry = State.RateioProjectEntries[index];
+                <div class="payroll-nested-block__row">
+                    <Select Label="Projeto" Value="@entry.ProjectId.ToString()" ValueChanged="@(v => UpdateRateioProjectAsync(index, v))">
+                        @foreach (var option in Options.Projects)
+                        {
+                            <option value="@option.Id">@option.Name</option>
+                        }
+                    </Select>
+                    <Input Label="Rateio (opcional)" IsMoney="true" Value="@(entry.RateioValue is null ? string.Empty : PayrollInputHelpers.FormatMoney(entry.RateioValue.Value))"
+                           ValueChanged="@(v => UpdateRateioValueAsync(index, v))" />
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Sm" OnClick="@(() => RemoveRateioAsync(index))">
+                        <Icon Kind="IconKind.Trash2" Size="IconSize.Default" />
+                    </Button>
+                </div>
+            }
+        </div>
+    }
+
+    @for (var i = 0; i < State.ProjectEntries.Count; i++)
+    {
+        var index = i;
+        var entry = State.ProjectEntries[index];
+        <div class="payroll-nested-block payroll-nested-block--inner">
+            <div class="payroll-nested-block__header">
+                <Select Label="Projeto" Value="@entry.ProjectId.ToString()" ValueChanged="@(v => UpdateProjectAsync(index, v))">
+                    @foreach (var option in Options.Projects)
+                    {
+                        <option value="@option.Id">@option.Name</option>
+                    }
+                </Select>
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Sm" OnClick="@(() => RemoveProjectAsync(index))">
+                    <Icon Kind="IconKind.Trash2" Size="IconSize.Default" />
+                </Button>
+            </div>
+            <div class="payroll-nested-block__grid">
+                <Input Label="Valor" IsMoney="true" Value="@PayrollInputHelpers.FormatMoney(entry.Value)"
+                       ValueChanged="@(v => UpdateValueAsync(index, v))" />
+                @if (State.CalculationProfile == CalculationProfile.Tipster)
+                {
+                    <Input Label="% grupo" Kind="NumericInputKind.Percent" Value="@PayrollInputHelpers.FormatPercent(entry.GroupPercentage)"
+                           ValueChanged="@(v => UpdateGroupPctAsync(index, v))" />
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PayrollEntryEditState State { get; set; } = default!;
+    [Parameter, EditorRequired] public PayrollEditorOptionsDto Options { get; set; } = default!;
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private async Task OnGoalToggleAsync(bool value)
+    {
+        State.GoalTier = value ? GoalTier.Goal : GoalTier.None;
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task AddProjectAsync()
+    {
+        var project = Options.Projects.FirstOrDefault();
+        if (project is null) return;
+        State.ProjectEntries.Add(new ProjectEntryDto(project.Id, 0m));
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task RemoveProjectAsync(int index)
+    {
+        State.ProjectEntries.RemoveAt(index);
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateProjectAsync(int index, string? value)
+    {
+        if (!Guid.TryParse(value, out var projectId)) return;
+        var current = State.ProjectEntries[index];
+        State.ProjectEntries[index] = current with { ProjectId = projectId };
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateValueAsync(int index, string? value)
+    {
+        var current = State.ProjectEntries[index];
+        State.ProjectEntries[index] = current with { Value = PayrollInputHelpers.ParseMoney(value) };
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateGroupPctAsync(int index, string? value)
+    {
+        var current = State.ProjectEntries[index];
+        State.ProjectEntries[index] = current with { GroupPercentage = PayrollInputHelpers.ParseMoney(value) };
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task AddRateioAsync()
+    {
+        var project = Options.Projects.FirstOrDefault();
+        if (project is null) return;
+        State.RateioProjectEntries.Add(new RateioProjectEntryDto(project.Id));
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task RemoveRateioAsync(int index)
+    {
+        State.RateioProjectEntries.RemoveAt(index);
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateRateioProjectAsync(int index, string? value)
+    {
+        if (!Guid.TryParse(value, out var projectId)) return;
+        var current = State.RateioProjectEntries[index];
+        State.RateioProjectEntries[index] = current with { ProjectId = projectId };
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateRateioValueAsync(int index, string? value)
+    {
+        var current = State.RateioProjectEntries[index];
+        var parsed = string.IsNullOrWhiteSpace(value) ? (decimal?)null : PayrollInputHelpers.ParseMoney(value);
+        State.RateioProjectEntries[index] = current with { RateioValue = parsed };
+        await OnChanged.InvokeAsync();
+    }
+
+}

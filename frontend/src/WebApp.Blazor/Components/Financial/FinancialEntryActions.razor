@@ -1,0 +1,17 @@
+<PayrollDetailEntryActions ShowPayEntry="@ShowPayEntry"
+                             ShowToggleNf="@ShowToggleNf"
+                             IsPaid="@IsPaid"
+                             NfSent="@NfSent"
+                             IsBusy="@IsBusy"
+                             OnPayEntry="@OnPayEntry"
+                             OnToggleNf="@OnToggleNf" />
+
+@code {
+    [Parameter] public bool ShowPayEntry { get; set; }
+    [Parameter] public bool ShowToggleNf { get; set; }
+    [Parameter] public bool IsPaid { get; set; }
+    [Parameter] public bool NfSent { get; set; }
+    [Parameter] public bool IsBusy { get; set; }
+    [Parameter] public EventCallback OnPayEntry { get; set; }
+    [Parameter] public EventCallback OnToggleNf { get; set; }
+}

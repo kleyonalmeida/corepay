@@ -1,0 +1,9 @@
+@page "/admin/roles"
+@attribute [Authorize(Policy = AppPolicies.RolesRead)]
+
+<PageTitle>Papéis — CorePay</PageTitle>
+
+<h1 class="text-page-title">Papéis</h1>
+<p class="text-page-subtitle">Gerencie papéis e os acessos de cada perfil</p>
+
+<RolesSection />

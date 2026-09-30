@@ -1,0 +1,432 @@
+@using WebApp.Blazor.Formatting
+@inject IPayrollApiService PayrollApi
+@inject NavigationManager Navigation
+
+<div class="payroll-form">
+    <div class="payroll-form__header">
+        <div>
+            <h1 class="text-page-title">@Title</h1>
+            @if (Mode == PayrollFormMode.Edit && _detail is not null)
+            {
+                <p class="text-page-subtitle">@_detail.DepartmentName — @_detail.Month/@_detail.Year</p>
+            }
+            else
+            {
+                <p class="text-page-subtitle">Selecione a competência e adicione colaboradores do setor.</p>
+            }
+        </div>
+
+        @if (Mode == PayrollFormMode.Edit && _detail is not null)
+        {
+            <StatusBadge Kind="@PayrollStatusMapper.ToStatusKind(_detail.Status)" />
+        }
+    </div>
+
+    @if (_loading)
+    {
+        <div class="auth-loading">
+            <Spinner Label="Carregando folha..." />
+            <span>Carregando...</span>
+        </div>
+    }
+    else
+    {
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <p class="settings-form__error" role="alert">@_error</p>
+        }
+
+        <div class="ui-card">
+            <div class="ui-card__header">
+                <h2 class="font-semibold">Competência</h2>
+            </div>
+            <div class="ui-card__body">
+                <PayrollHeaderFields Departments="@_departments"
+                                     SelectedDepartmentId="@_departmentId"
+                                     SelectedDepartmentIdChanged="@OnDepartmentChangedAsync"
+                                     Month="@_month"
+                                     MonthChanged="@(value => _month = value)"
+                                     Year="@_year"
+                                     YearChanged="@(value => _year = value)"
+                                     Disabled="@(Mode == PayrollFormMode.Edit)" />
+            </div>
+        </div>
+
+        <div class="ui-card payroll-form__entries-card">
+            <div class="ui-card__header payroll-form__entries-header">
+                <h2 class="font-semibold">Colaboradores</h2>
+                <Button Variant="ButtonVariant.Default"
+                        Size="ButtonSize.Sm"
+                        Disabled="@(!CanAddCollaborator || _saving)"
+                        OnClick="@OpenPickerAsync">
+                    <Icon Kind="IconKind.Plus" Size="IconSize.Default" />
+                    Adicionar colaborador
+                </Button>
+            </div>
+            <div class="ui-card__body">
+                @if (Mode == PayrollFormMode.Create && _createEntries.Count == 0
+                     || Mode == PayrollFormMode.Edit && _editorStates.Count == 0)
+                {
+                    <EmptyState Title="Nenhum colaborador"
+                                Description="Adicione colaboradores ativos do setor selecionado." />
+                }
+                else if (Mode == PayrollFormMode.Create)
+                {
+                    <div class="payroll-form__entries-body">
+                        @foreach (var entry in _createEntries)
+                        {
+                            <PayrollEntryShellRow Entry="@entry"
+                                                  CanRemove="true"
+                                                  IsBusy="@_saving"
+                                                  OnRemove="@RemoveCreateEntryAsync" />
+                        }
+                    </div>
+                }
+                else if (_detail is not null && PayrollId is not null)
+                {
+                    <div class="payroll-form__entries-body">
+                        @foreach (var state in _editorStates)
+                        {
+                            <PayrollEntryEditor State="@state"
+                                                Options="@_detail.EditorOptions"
+                                                PayrollId="@PayrollId.Value"
+                                                CanRemove="true"
+                                                IsBusy="@_saving"
+                                                OnRemove="@(() => RemoveEditorEntryAsync(state))" />
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        @if (Mode == PayrollFormMode.Create)
+        {
+            <div class="payroll-form__actions">
+                <Button Disabled="@(!CanCreate || _saving)"
+                        OnClick="@CreatePayrollAsync">
+                    Criar folha
+                </Button>
+            </div>
+        }
+        else if (Mode == PayrollFormMode.Edit && CanSave)
+        {
+            <div class="payroll-form__actions">
+                @if (_detail is not null && _detail.TotalAmount > 0)
+                {
+                    <p class="payroll-form__total">
+                        Total da folha:
+                        <strong class="tabular-nums">@MoneyFormatter.FormatMoney(_detail.TotalAmount)</strong>
+                    </p>
+                }
+                <Button Variant="ButtonVariant.Outline"
+                        Disabled="@_saving"
+                        OnClick="@SavePayrollAsync">
+                    Salvar
+                </Button>
+                <Button Disabled="@_saving"
+                        OnClick="@SaveAndSubmitPayrollAsync">
+                    Salvar e submeter
+                </Button>
+            </div>
+        }
+    }
+</div>
+
+<PayrollCollaboratorPicker IsOpen="@_pickerOpen"
+                           IsOpenChanged="@(value => _pickerOpen = value)"
+                           DepartmentId="@_departmentId"
+                           ExcludedCollaboratorIds="@ExcludedCollaboratorIds"
+                           OnSelected="@AddCollaboratorAsync" />
+
+@code {
+    [Parameter] public PayrollFormMode Mode { get; set; } = PayrollFormMode.Create;
+    [Parameter] public Guid? PayrollId { get; set; }
+    [Parameter] public PayrollDetailDto? InitialPayroll { get; set; }
+
+    private bool _loading = true;
+    private bool _saving;
+    private bool _pickerOpen;
+    private string? _error;
+    private PayrollDetailDto? _detail;
+    private List<PayrollFormDepartmentOptionDto> _departments = [];
+    private List<PayrollEntryShellDto> _createEntries = [];
+    private List<PayrollEntryEditState> _editorStates = [];
+    private Guid? _departmentId;
+    private int _month;
+    private int _year;
+
+    private string Title => Mode == PayrollFormMode.Create ? "Nova folha" : "Editar folha";
+
+    private IReadOnlyCollection<Guid> ExcludedCollaboratorIds =>
+        Mode == PayrollFormMode.Create
+            ? _createEntries.Select(e => e.CollaboratorId).ToList()
+            : _editorStates.Select(e => e.CollaboratorId).ToList();
+
+    private bool CanAddCollaborator =>
+        _departmentId is not null
+        && (Mode == PayrollFormMode.Create || PayrollStatusMapper.IsEditable(_detail?.Status));
+
+    private bool CanCreate =>
+        _departmentId is not null
+        && _month is >= 1 and <= 12
+        && _year >= 2000
+        && _createEntries.Count > 0;
+
+    private bool CanSave =>
+        Mode == PayrollFormMode.Edit
+        && PayrollId is not null
+        && PayrollStatusMapper.IsEditable(_detail?.Status)
+        && _editorStates.Count > 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var (month, year) = PayrollCompetenceDefaults.CurrentCompetence();
+        _month = month;
+        _year = year;
+
+        var optionsResult = await PayrollApi.GetFormOptionsAsync();
+        if (optionsResult.Status != PayrollApiStatus.Success || optionsResult.Options is null)
+        {
+            _error = PayrollErrorMessages.Translate(optionsResult.ErrorCode, optionsResult.Message);
+            _loading = false;
+            return;
+        }
+
+        _departments = optionsResult.Options.Departments.ToList();
+        if (_departments.Count == 1)
+        {
+            _departmentId = _departments[0].Id;
+        }
+
+        if (Mode == PayrollFormMode.Edit && PayrollId is not null)
+        {
+            if (InitialPayroll is not null && InitialPayroll.Id == PayrollId.Value)
+            {
+                ApplyDetail(InitialPayroll);
+            }
+            else
+            {
+                var detailResult = await PayrollApi.GetPayrollAsync(PayrollId.Value);
+                if (detailResult.Status != PayrollAccessStatus.Found || detailResult.Payroll is null)
+                {
+                    _error = "Não foi possível carregar a folha.";
+                    _loading = false;
+                    return;
+                }
+
+                ApplyDetail(detailResult.Payroll);
+            }
+        }
+
+        _loading = false;
+    }
+
+    private Task OnDepartmentChangedAsync(Guid? departmentId)
+    {
+        if (Mode == PayrollFormMode.Create && departmentId != _departmentId)
+        {
+            _createEntries.Clear();
+        }
+
+        _departmentId = departmentId;
+        return Task.CompletedTask;
+    }
+
+    private Task OpenPickerAsync()
+    {
+        _pickerOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private async Task AddCollaboratorAsync(CollaboratorDto collaborator)
+    {
+        if (Mode == PayrollFormMode.Create)
+        {
+            _createEntries.Add(new PayrollEntryShellDto(
+                Guid.Empty,
+                collaborator.Id,
+                collaborator.Name,
+                collaborator.CareerLevelName,
+                collaborator.PixKey,
+                collaborator.AdmissionDate,
+                collaborator.BaseSalary,
+                collaborator.CalculationProfileOverride ?? CalculationProfile.CommercialAnalyst,
+                false));
+            return;
+        }
+
+        if (PayrollId is null)
+        {
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+
+        var collaboratorIds = _editorStates.Select(e => e.CollaboratorId).Append(collaborator.Id).Distinct().ToList();
+        var result = await PayrollApi.UpdatePayrollAsync(
+            PayrollId.Value,
+            new UpdatePayrollRequestDto(collaboratorIds));
+
+        _saving = false;
+
+        if (result.Status != PayrollApiStatus.Success || result.Payroll is null)
+        {
+            _error = PayrollErrorMessages.Translate(result.ErrorCode, result.Message);
+            return;
+        }
+
+        ApplyDetail(result.Payroll);
+    }
+
+    private async Task RemoveCreateEntryAsync(PayrollEntryShellDto entry)
+    {
+        _createEntries.RemoveAll(e => e.CollaboratorId == entry.CollaboratorId);
+        await Task.CompletedTask;
+    }
+
+    private async Task RemoveEditorEntryAsync(PayrollEntryEditState state)
+    {
+        if (PayrollId is null)
+        {
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+
+        var collaboratorIds = _editorStates
+            .Where(e => e.CollaboratorId != state.CollaboratorId)
+            .Select(e => e.CollaboratorId)
+            .ToList();
+
+        var result = await PayrollApi.UpdatePayrollAsync(
+            PayrollId.Value,
+            new UpdatePayrollRequestDto(collaboratorIds));
+
+        _saving = false;
+
+        if (result.Status != PayrollApiStatus.Success || result.Payroll is null)
+        {
+            _error = PayrollErrorMessages.Translate(result.ErrorCode, result.Message);
+            return;
+        }
+
+        ApplyDetail(result.Payroll);
+    }
+
+    private async Task CreatePayrollAsync()
+    {
+        if (_departmentId is null)
+        {
+            _error = "Selecione um setor.";
+            return;
+        }
+
+        if (_createEntries.Count == 0)
+        {
+            _error = "Adicione ao menos um colaborador.";
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+
+        var result = await PayrollApi.CreatePayrollAsync(new CreatePayrollRequestDto(
+            _departmentId.Value,
+            _month,
+            _year,
+            _createEntries.Select(e => e.CollaboratorId).ToList()));
+
+        _saving = false;
+
+        if (result.Status != PayrollApiStatus.Success || result.Payroll is null)
+        {
+            _error = PayrollErrorMessages.Translate(result.ErrorCode, result.Message);
+            return;
+        }
+
+        Navigation.NavigateTo($"/payrolls/{result.Payroll.Id}/edit");
+    }
+
+    private UpdatePayrollRequestDto BuildUpdateRequest() =>
+        new(
+            _editorStates.Select(e => e.CollaboratorId).ToList(),
+            _editorStates.Select(e => e.ToSaveRequest()).ToList());
+
+    private async Task SavePayrollAsync()
+    {
+        if (PayrollId is null)
+        {
+            return;
+        }
+
+        if (_editorStates.Count == 0)
+        {
+            _error = "Adicione ao menos um colaborador.";
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+
+        var result = await PayrollApi.UpdatePayrollAsync(PayrollId.Value, BuildUpdateRequest());
+
+        _saving = false;
+
+        if (result.Status != PayrollApiStatus.Success || result.Payroll is null)
+        {
+            _error = PayrollErrorMessages.Translate(result.ErrorCode, result.Message);
+            return;
+        }
+
+        ApplyDetail(result.Payroll);
+    }
+
+    private async Task SaveAndSubmitPayrollAsync()
+    {
+        if (PayrollId is null)
+        {
+            return;
+        }
+
+        if (_editorStates.Count == 0)
+        {
+            _error = "Adicione ao menos um colaborador.";
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+
+        var saveResult = await PayrollApi.UpdatePayrollAsync(PayrollId.Value, BuildUpdateRequest());
+        if (saveResult.Status != PayrollApiStatus.Success || saveResult.Payroll is null)
+        {
+            _saving = false;
+            _error = PayrollErrorMessages.Translate(saveResult.ErrorCode, saveResult.Message);
+            return;
+        }
+
+        ApplyDetail(saveResult.Payroll);
+
+        var submitResult = await PayrollApi.SubmitPayrollAsync(PayrollId.Value);
+        _saving = false;
+
+        if (submitResult.Status != PayrollApiStatus.Success)
+        {
+            _error = PayrollErrorMessages.Translate(submitResult.ErrorCode, submitResult.Message);
+            return;
+        }
+
+        Navigation.NavigateTo("/payrolls");
+    }
+
+    private void ApplyDetail(PayrollDetailDto detail)
+    {
+        _detail = detail;
+        _departmentId = detail.DepartmentId;
+        _month = detail.Month;
+        _year = detail.Year;
+        _editorStates = detail.Entries.Select(e => new PayrollEntryEditState(e)).ToList();
+    }
+}

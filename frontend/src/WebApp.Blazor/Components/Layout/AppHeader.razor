@@ -1,0 +1,82 @@
+@inject NavigationManager NavigationManager
+@inject SidebarState SidebarState
+@inject NotificationState NotificationState
+@implements IDisposable
+
+<header class="app-header">
+    <div class="app-header__left">
+        <SidebarTrigger />
+        @if (!string.IsNullOrWhiteSpace(_routeTitle))
+        {
+            <span class="app-header__title text-topbar-title">@_routeTitle</span>
+        }
+    </div>
+
+    <div class="app-header__actions">
+        <ThemeToggle />
+        <a href="/notifications"
+           class="app-header__notifications"
+           aria-label="@NotificationsAriaLabel">
+            <Icon Kind="IconKind.Bell" Size="IconSize.Topbar" />
+            @if (NotificationState.UnreadCount > 0)
+            {
+                <span class="app-header__notifications-badge" aria-hidden="true">
+                    @BadgeText
+                </span>
+            }
+        </a>
+    </div>
+</header>
+
+@code {
+    private string? _routeTitle;
+
+    private string BadgeText =>
+        NotificationState.UnreadCount > 9
+            ? "9+"
+            : NotificationState.UnreadCount.ToString();
+
+    private string NotificationsAriaLabel =>
+        NotificationState.UnreadCount > 0
+            ? $"Notificações ({NotificationState.UnreadCount} não lidas)"
+            : "Notificações";
+
+    protected override void OnInitialized()
+    {
+        UpdateRouteTitle();
+        NavigationManager.LocationChanged += HandleLocationChanged;
+        SidebarState.StateChanged += HandleSidebarStateChanged;
+        NotificationState.StateChanged += HandleNotificationStateChanged;
+        _ = NotificationState.RefreshAsync();
+    }
+
+    private void HandleLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        UpdateRouteTitle();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void HandleSidebarStateChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void HandleNotificationStateChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void UpdateRouteTitle()
+    {
+        var relativePath = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        var path = string.IsNullOrWhiteSpace(relativePath) ? "/" : $"/{relativePath.Split('?', '#')[0]}";
+        _routeTitle = ShellNavigation.GetTitleForPath(path);
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= HandleLocationChanged;
+        SidebarState.StateChanged -= HandleSidebarStateChanged;
+        NotificationState.StateChanged -= HandleNotificationStateChanged;
+    }
+}

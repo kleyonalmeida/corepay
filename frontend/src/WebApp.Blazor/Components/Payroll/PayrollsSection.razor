@@ -1,0 +1,347 @@
+@inject IPayrollApiService PayrollApiService
+@inject IDepartmentApiService DepartmentApiService
+@inject IAuthorizationService AuthorizationService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager NavigationManager
+
+<div class="payrolls-page">
+    @if (!string.IsNullOrWhiteSpace(_actionMessage))
+    {
+        <div class="payrolls-action-message">@_actionMessage</div>
+    }
+
+    <Card Class="payrolls-filters-card">
+        <ChildContent>
+            <div class="payrolls-filters">
+                <Input Label="Buscar"
+                       DebounceMs="400"
+                       Placeholder="Setor ou colaborador"
+                       Value="@_search"
+                       ValueChanged="@OnSearchChangedAsync"
+                       AdditionalAttributes="@SearchInputAttributes" />
+                <Select Label="Mês"
+                        Value="@_monthFilter"
+                        ValueChanged="@OnMonthFilterChangedAsync">
+                    <option value="">Todos</option>
+                    @for (var month = 1; month <= 12; month++)
+                    {
+                        <option value="@month">@CompetenceFormatter.Format(month, 2000).Split('/')[0]</option>
+                    }
+                </Select>
+                <Select Label="Ano"
+                        Value="@_yearFilter"
+                        ValueChanged="@OnYearFilterChangedAsync">
+                    <option value="">Todos</option>
+                    @foreach (var year in _yearOptions)
+                    {
+                        <option value="@year">@year</option>
+                    }
+                </Select>
+                <Select Label="Status"
+                        Value="@_statusFilter"
+                        ValueChanged="@OnStatusFilterChangedAsync">
+                    <option value="">Todos</option>
+                    <option value="draft">Rascunho</option>
+                    <option value="pendingApproval">Aguard. Aprovação</option>
+                    <option value="approved">Aprovada</option>
+                    <option value="rejected">Reprovada</option>
+                    <option value="paid">Paga</option>
+                </Select>
+                @if (!_isDepartmentScoped)
+                {
+                    <Select Label="Setor"
+                            Value="@_departmentFilter"
+                            ValueChanged="@OnDepartmentFilterChangedAsync"
+                            Disabled="@_isLoadingDepartments">
+                        <option value="">Todos os setores</option>
+                        @foreach (var department in _departments)
+                        {
+                            <option value="@department.Id">@department.Name</option>
+                        }
+                    </Select>
+                }
+            </div>
+        </ChildContent>
+    </Card>
+
+    @if (_isLoading)
+    {
+        <Card Class="payrolls-content-card">
+            <ChildContent>
+                <div class="settings-section__loading">
+                    <Spinner Label="Carregando folhas de pagamento..." />
+                </div>
+            </ChildContent>
+        </Card>
+    }
+    else if (!string.IsNullOrWhiteSpace(_loadError))
+    {
+        <Card Class="payrolls-content-card">
+            <ChildContent>
+                <EmptyState Title="Erro ao carregar folhas de pagamento" Description="@_loadError" />
+            </ChildContent>
+        </Card>
+    }
+    else if (_payrolls.Count == 0)
+    {
+        <Card Class="payrolls-content-card">
+            <ChildContent>
+                <EmptyState Title="Nenhuma folha encontrada"
+                            Description="@GetEmptyStateDescription()" />
+            </ChildContent>
+        </Card>
+    }
+    else
+    {
+        @foreach (var group in GetGroupedPayrolls())
+        {
+            <Card Class="payrolls-competence-card">
+                <HeaderContent>
+                    <div class="payrolls-competence-header">
+                        <Icon Kind="IconKind.Calendar" Size="IconSize.Default" Class="payrolls-competence-header__icon" />
+                        <span class="payrolls-competence-header__title">
+                            @CompetenceFormatter.Format(group.Key.Month, group.Key.Year)
+                        </span>
+                        <span class="payrolls-competence-header__count">
+                            @group.Count() @(group.Count() == 1 ? "folha" : "folhas")
+                        </span>
+                    </div>
+                </HeaderContent>
+                <ChildContent>
+                    <div class="settings-table-wrapper">
+                        <table class="settings-table payrolls-table">
+                            <thead>
+                                <tr>
+                                    <th>Setor</th>
+                                    <th>Colaboradores</th>
+                                    <th class="payrolls-table__total">Total</th>
+                                    <th>Status</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var payroll in group)
+                                {
+                                    <tr class="payrolls-table__row @GetPaidRowClass(payroll.Status)"
+                                        @onclick="@(() => NavigateToDetail(payroll.Id))">
+                                        <td>@payroll.DepartmentName</td>
+                                        <td class="tabular-nums">@payroll.EntryCount</td>
+                                        <td class="payrolls-table__total text-table-money tabular-nums">
+                                            @MoneyFormatter.FormatMoney(payroll.TotalAmount)
+                                        </td>
+                                        <td>
+                                            <StatusBadge Kind="@PayrollStatusMapper.ToStatusKind(payroll.Status)" />
+                                        </td>
+                                        <td class="settings-table__actions" @onclick:stopPropagation="true">
+                                            <div class="payrolls-table__row-action">
+                                                @if (_canWrite)
+                                                {
+                                                    <Button Variant="ButtonVariant.Ghost"
+                                                            Size="ButtonSize.Sm"
+                                                            OnClick="@(() => DuplicateAsync(payroll))">
+                                                        Duplicar
+                                                    </Button>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </ChildContent>
+            </Card>
+        }
+
+        <PaginationBar Page="@_page"
+                       TotalCount="@_totalCount"
+                       Disabled="@_isLoading"
+                       PageChanged="@OnPageChangedAsync" />
+    }
+</div>
+
+@code {
+    private readonly List<PayrollListItemDto> _payrolls = [];
+    private readonly List<DepartmentDto> _departments = [];
+    private readonly int[] _yearOptions = BuildYearOptions();
+
+    private bool _isLoading = true;
+    private bool _isLoadingDepartments = true;
+    private bool _canWrite;
+    private bool _isDepartmentScoped;
+    private string? _loadError;
+    private string? _actionMessage;
+    private bool _isDuplicating;
+
+    private string _search = string.Empty;
+    private string _monthFilter = string.Empty;
+    private string _yearFilter = string.Empty;
+    private string _statusFilter = string.Empty;
+    private string _departmentFilter = string.Empty;
+    private int _page = 1;
+    private int _totalCount;
+
+    private static Dictionary<string, object> SearchInputAttributes => new()
+    {
+        ["autocomplete"] = "off"
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _isDepartmentScoped = DepartmentScopeHelper.IsDepartmentScoped(authState.User);
+
+        var writeAuthorization = await AuthorizationService.AuthorizeAsync(
+            authState.User,
+            AppPolicies.PayrollsWrite);
+        _canWrite = writeAuthorization.Succeeded;
+
+        if (!_isDepartmentScoped)
+        {
+            await LoadDepartmentsAsync();
+        }
+
+        await LoadPayrollsAsync();
+    }
+
+    private static int[] BuildYearOptions()
+    {
+        var currentYear = DateTime.UtcNow.Year;
+        return Enumerable.Range(currentYear - 2, 5).Reverse().ToArray();
+    }
+
+    private async Task LoadDepartmentsAsync()
+    {
+        _isLoadingDepartments = true;
+        _departments.Clear();
+
+        var result = await DepartmentApiService.GetDepartmentsAsync();
+        if (result.Status == DepartmentApiStatus.Success && result.Departments is not null)
+        {
+            _departments.AddRange(result.Departments.OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase));
+        }
+
+        _isLoadingDepartments = false;
+    }
+
+    private async Task LoadPayrollsAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+        _payrolls.Clear();
+
+        var result = await PayrollApiService.GetPayrollsAsync(BuildListQuery());
+        if (result.Status == PayrollApiStatus.Success && result.Payrolls is not null)
+        {
+            _payrolls.AddRange(result.Payrolls);
+            _totalCount = result.TotalCount;
+            _page = result.Page;
+        }
+        else
+        {
+            _loadError = PayrollErrorMessages.ForList(result);
+        }
+
+        _isLoading = false;
+    }
+
+    private PayrollListQuery BuildListQuery() =>
+        new(
+            string.IsNullOrWhiteSpace(_search) ? null : _search.Trim(),
+            ParseIntFilter(_monthFilter),
+            ParseIntFilter(_yearFilter),
+            string.IsNullOrWhiteSpace(_statusFilter) ? null : _statusFilter,
+            _isDepartmentScoped ? null : ParseDepartmentFilter(),
+            _page,
+            ListPagination.PageSize);
+
+    private static int? ParseIntFilter(string value) =>
+        int.TryParse(value, out var parsed) ? parsed : null;
+
+    private Guid? ParseDepartmentFilter() =>
+        Guid.TryParse(_departmentFilter, out var departmentId) ? departmentId : null;
+
+    private IEnumerable<IGrouping<(int Year, int Month), PayrollListItemDto>> GetGroupedPayrolls() =>
+        _payrolls
+            .GroupBy(p => (p.Year, p.Month))
+            .OrderByDescending(g => g.Key.Year)
+            .ThenByDescending(g => g.Key.Month);
+
+    private static string GetPaidRowClass(string status) =>
+        status.Equals("paid", StringComparison.OrdinalIgnoreCase)
+            ? "payrolls-table__row--paid"
+            : string.Empty;
+
+    private string GetEmptyStateDescription() =>
+        _canWrite
+            ? "Ajuste os filtros ou crie uma nova folha."
+            : "Ajuste os filtros para encontrar folhas.";
+
+    private void NavigateToDetail(Guid payrollId) =>
+        NavigationManager.NavigateTo($"/payrolls/{payrollId}");
+
+    private async Task DuplicateAsync(PayrollListItemDto payroll)
+    {
+        if (_isDuplicating)
+        {
+            return;
+        }
+
+        _isDuplicating = true;
+        _actionMessage = null;
+
+        var result = await PayrollApiService.DuplicatePayrollAsync(payroll.Id);
+        if (result.Status == PayrollApiStatus.Success && result.Payroll is not null)
+        {
+            _actionMessage = $"Folha duplicada para {CompetenceFormatter.Format(result.Payroll.Month, result.Payroll.Year)}.";
+            await LoadPayrollsAsync();
+        }
+        else
+        {
+            _actionMessage = PayrollErrorMessages.ForDuplicate(result);
+        }
+
+        _isDuplicating = false;
+    }
+
+    private async Task OnSearchChangedAsync(string? value)
+    {
+        _search = value ?? string.Empty;
+        _page = 1;
+        await LoadPayrollsAsync();
+    }
+
+    private async Task OnMonthFilterChangedAsync(string? value)
+    {
+        _monthFilter = value ?? string.Empty;
+        _page = 1;
+        await LoadPayrollsAsync();
+    }
+
+    private async Task OnYearFilterChangedAsync(string? value)
+    {
+        _yearFilter = value ?? string.Empty;
+        _page = 1;
+        await LoadPayrollsAsync();
+    }
+
+    private async Task OnStatusFilterChangedAsync(string? value)
+    {
+        _statusFilter = value ?? string.Empty;
+        _page = 1;
+        await LoadPayrollsAsync();
+    }
+
+    private async Task OnDepartmentFilterChangedAsync(string? value)
+    {
+        _departmentFilter = value ?? string.Empty;
+        _page = 1;
+        await LoadPayrollsAsync();
+    }
+
+    private async Task OnPageChangedAsync(int page)
+    {
+        _page = page;
+        await LoadPayrollsAsync();
+    }
+}

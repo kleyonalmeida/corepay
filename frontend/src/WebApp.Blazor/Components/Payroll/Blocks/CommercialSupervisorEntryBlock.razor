@@ -1,0 +1,86 @@
+<div class="payroll-nested-block">
+    <div class="payroll-nested-block__header">
+        <h3 class="payroll-nested-block__title">Projetos supervisor</h3>
+        <Button Variant="ButtonVariant.Outline" Size="ButtonSize.Sm" OnClick="@AddProjectAsync">
+            <Icon Kind="IconKind.Plus" Size="IconSize.Default" />
+            Projeto
+        </Button>
+    </div>
+
+    @for (var i = 0; i < State.SupervisorProjectEntries.Count; i++)
+    {
+        var index = i;
+        var entry = State.SupervisorProjectEntries[index];
+        <div class="payroll-nested-block payroll-nested-block--inner">
+            <div class="payroll-nested-block__header">
+                <Select Label="Projeto" Value="@entry.ProjectId.ToString()" ValueChanged="@(v => UpdateProjectAsync(index, v))">
+                    @foreach (var option in Options.Projects)
+                    {
+                        <option value="@option.Id">@option.Name</option>
+                    }
+                </Select>
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Sm" OnClick="@(() => RemoveProjectAsync(index))">
+                    <Icon Kind="IconKind.Trash2" Size="IconSize.Default" />
+                </Button>
+            </div>
+            <div class="payroll-nested-block__grid">
+                <Input Label="FTD total" Kind="NumericInputKind.Integer" Value="@PayrollInputHelpers.FormatInt(entry.FtdTotal)" ValueChanged="@(v => Update(index, e => e with { FtdTotal = PayrollInputHelpers.ParseInt(v) }))" />
+                <Input Label="FTD Superbet" Kind="NumericInputKind.Integer" Value="@PayrollInputHelpers.FormatInt(entry.FtdSuperbet)" ValueChanged="@(v => Update(index, e => e with { FtdSuperbet = PayrollInputHelpers.ParseInt(v) }))" />
+                <Input Label="Vendas" IsMoney="true" Value="@PayrollInputHelpers.FormatMoney(entry.SalesAmount)" ValueChanged="@(v => Update(index, e => e with { SalesAmount = PayrollInputHelpers.ParseMoney(v) }))" />
+                <Input Label="Rev analistas" IsMoney="true" Value="@PayrollInputHelpers.FormatMoney(entry.AnalystRev)" ValueChanged="@(v => Update(index, e => e with { AnalystRev = PayrollInputHelpers.ParseMoney(v) }))" />
+                <Input Label="Recarga" IsMoney="true" Value="@PayrollInputHelpers.FormatMoney(entry.DeviceRecharge)" ValueChanged="@(v => Update(index, e => e with { DeviceRecharge = PayrollInputHelpers.ParseMoney(v) }))" />
+                <Input Label="Bônus CPA" IsMoney="true" Value="@PayrollInputHelpers.FormatMoney(entry.BonusCpa)" ValueChanged="@(v => Update(index, e => e with { BonusCpa = PayrollInputHelpers.ParseMoney(v) }))" />
+            </div>
+            <div class="payroll-nested-block__toggles">
+                <GoalToggle Label="Meta FTD projeto" Value="@entry.IsProjectFtdGoalReached" ValueChanged="@(v => UpdateBool(index, e => e with { IsProjectFtdGoalReached = v }))" />
+                <GoalToggle Label="Meta vendas projeto" Value="@entry.IsProjectSalesGoalReached" ValueChanged="@(v => UpdateBool(index, e => e with { IsProjectSalesGoalReached = v }))" />
+            </div>
+        </div>
+    }
+
+    <Input Label="Rev analista (entrada única)"
+           IsMoney="true"
+           Value="@PayrollInputHelpers.FormatMoney(State.SupervisorAnalystRevenue)"
+           ValueChanged="@(async v => { State.SupervisorAnalystRevenue = PayrollInputHelpers.ParseMoney(v); await OnChanged.InvokeAsync(); })" />
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PayrollEntryEditState State { get; set; } = default!;
+    [Parameter, EditorRequired] public PayrollEditorOptionsDto Options { get; set; } = default!;
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private async Task AddProjectAsync()
+    {
+        var project = Options.Projects.FirstOrDefault();
+        if (project is null) return;
+        State.SupervisorProjectEntries.Add(new SupervisorProjectEntryDto(project.Id, 0, 0, 0m, 0m, false, false));
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task RemoveProjectAsync(int index)
+    {
+        State.SupervisorProjectEntries.RemoveAt(index);
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateProjectAsync(int index, string? value)
+    {
+        if (!Guid.TryParse(value, out var projectId)) return;
+        var current = State.SupervisorProjectEntries[index];
+        State.SupervisorProjectEntries[index] = current with { ProjectId = projectId };
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task Update(int index, Func<SupervisorProjectEntryDto, SupervisorProjectEntryDto> update)
+    {
+        State.SupervisorProjectEntries[index] = update(State.SupervisorProjectEntries[index]);
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateBool(int index, Func<SupervisorProjectEntryDto, SupervisorProjectEntryDto> update)
+    {
+        State.SupervisorProjectEntries[index] = update(State.SupervisorProjectEntries[index]);
+        await OnChanged.InvokeAsync();
+    }
+
+}

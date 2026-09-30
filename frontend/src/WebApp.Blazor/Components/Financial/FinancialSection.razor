@@ -1,0 +1,601 @@
+@using WebApp.Blazor.Auth
+@using WebApp.Blazor.Formatting
+@inject IFinanceApiService FinanceApiService
+@inject IPayrollApiService PayrollApiService
+@inject IAuthorizationService AuthorizationService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<div class="financial-page">
+    @if (!string.IsNullOrWhiteSpace(_actionMessage))
+    {
+        <p class="settings-form__hint" role="status">@_actionMessage</p>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_actionError))
+    {
+        <p class="settings-form__error" role="alert">@_actionError</p>
+    }
+
+    <Card Class="financial-filters-card">
+        <ChildContent>
+            <div class="financial-filters">
+                <Select Label="Mês"
+                        Value="@_monthFilter"
+                        ValueChanged="@OnMonthFilterChangedAsync">
+                    <option value="">Todos</option>
+                    @for (var month = 1; month <= 12; month++)
+                    {
+                        <option value="@month">@CompetenceFormatter.Format(month, 2000).Split('/')[0]</option>
+                    }
+                </Select>
+                <Select Label="Ano"
+                        Value="@_yearFilter"
+                        ValueChanged="@OnYearFilterChangedAsync">
+                    <option value="">Todos</option>
+                    @foreach (var year in _yearOptions)
+                    {
+                        <option value="@year">@year</option>
+                    }
+                </Select>
+                <Select Label="Setor"
+                        Value="@_departmentFilter"
+                        ValueChanged="@OnDepartmentFilterChangedAsync"
+                        Disabled="@_isLoading">
+                    <option value="">Todos os setores</option>
+                    @foreach (var department in _departments)
+                    {
+                        <option value="@department.Id">@department.Name</option>
+                    }
+                </Select>
+                <Select Label="Projeto"
+                        Value="@_projectFilter"
+                        ValueChanged="@OnProjectFilterChangedAsync"
+                        Disabled="@_isLoading">
+                    <option value="">Todos os projetos</option>
+                    @foreach (var project in _projects)
+                    {
+                        <option value="@project.Id">@project.Name</option>
+                    }
+                </Select>
+            </div>
+        </ChildContent>
+    </Card>
+
+    @if (_isLoading)
+    {
+        <Card Class="financial-content-card">
+            <ChildContent>
+                <div class="settings-section__loading">
+                    <Spinner Label="Carregando financeiro..." />
+                </div>
+            </ChildContent>
+        </Card>
+    }
+    else if (!string.IsNullOrWhiteSpace(_loadError))
+    {
+        <Card Class="financial-content-card">
+            <ChildContent>
+                <EmptyState Title="Erro ao carregar financeiro" Description="@_loadError" />
+            </ChildContent>
+        </Card>
+    }
+    else
+    {
+        <Tabs Items="@_tabItems"
+              ActiveTab="_activeTab"
+              ActiveTabChanged="OnActiveTabChangedAsync"
+              AriaLabel="Financeiro">
+            @if (_activeTab == 0)
+            {
+                @if (_payrolls.Count > 0)
+                {
+                    <div class="financial-stats-grid">
+                        <StatCard Label="Total a pagar"
+                                  Value="@TotalToPay"
+                                  Tone="SemanticTone.Primary" />
+                        <StatCard Label="Total pago"
+                                  Value="@TotalPaid"
+                                  Tone="SemanticTone.Emerald"
+                                  Icon="IconKind.Wallet" />
+                    </div>
+                }
+
+                @if (_payrolls.Count == 0)
+                {
+                    <Card Class="financial-content-card">
+                        <ChildContent>
+                            <EmptyState Title="Nenhum colaborador a pagar"
+                                        Description="Ajuste os filtros para encontrar folhas com colaboradores elegíveis." />
+                        </ChildContent>
+                    </Card>
+                }
+                else
+                {
+                    @foreach (var payroll in _payrolls)
+                    {
+                        var isExpanded = _expandedPayrollIds.Contains(payroll.Id);
+                        <Card Class="@GetPayrollCardClass(payroll.Status)">
+                            <ChildContent>
+                                <button type="button"
+                                        class="financial-payroll-card__header"
+                                        aria-expanded="@isExpanded"
+                                        @onclick="@(() => TogglePayroll(payroll.Id))">
+                                    <Icon Kind="IconKind.ChevronRight"
+                                          Size="IconSize.Default"
+                                          Class="@($"financial-payroll-card__chevron {(isExpanded ? "financial-payroll-card__chevron--expanded" : null)}")" />
+                                    <div class="financial-payroll-card__title-group">
+                                        <span class="financial-payroll-card__title">@payroll.DepartmentName</span>
+                                        <span class="financial-payroll-card__competence">
+                                            @CompetenceFormatter.Format(payroll.Month, payroll.Year)
+                                        </span>
+                                    </div>
+                                    <StatusBadge Kind="@PayrollStatusMapper.ToStatusKind(payroll.Status)" />
+                                    <div class="financial-payroll-card__summary">
+                                        <FinancialAmountDisplay TotalAmount="@payroll.GrossTotal"
+                                                                PlatformTotal="@payroll.PlatformTotal"
+                                                                AmountToReceive="@payroll.AmountToReceive" />
+                                        <div class="financial-payroll-card__progress">
+                                            <FinancialProgressBar PaidCount="@payroll.PaidCount"
+                                                                  EntryCount="@payroll.EntryCount" />
+                                        </div>
+                                    </div>
+                                    <span class="financial-payroll-card__count">
+                                        @payroll.Entries.Count @(payroll.Entries.Count == 1 ? "colaborador" : "colaboradores")
+                                    </span>
+                                </button>
+
+                                @if (isExpanded)
+                                {
+                                    <div class="financial-payroll-card__body">
+                                        @if (CanAddCollaborator(payroll) || CanDeletePayroll(payroll))
+                                        {
+                                            <div class="financial-payroll-card__admin-actions">
+                                                @if (CanAddCollaborator(payroll))
+                                                {
+                                                    <Button Variant="ButtonVariant.Outline"
+                                                            Size="ButtonSize.Sm"
+                                                            Disabled="@_isBusy"
+                                                            OnClick="@(() => OpenPickerAsync(payroll))">
+                                                        <Icon Kind="IconKind.Users" Size="IconSize.Default" />
+                                                        Adicionar colaborador avulso
+                                                    </Button>
+                                                }
+                                                @if (CanDeletePayroll(payroll))
+                                                {
+                                                    <Button Variant="ButtonVariant.Destructive"
+                                                            Size="ButtonSize.Sm"
+                                                            Disabled="@_isBusy"
+                                                            OnClick="@(() => OpenDeleteDialogAsync(payroll))">
+                                                        <Icon Kind="IconKind.Trash2" Size="IconSize.Default" />
+                                                        Excluir folha
+                                                    </Button>
+                                                }
+                                            </div>
+                                        }
+
+                                        <div class="settings-table-wrapper">
+                                            <table class="settings-table financial-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Colaborador</th>
+                                                        <th>PIX</th>
+                                                        <th class="financial-table__total">A Receber</th>
+                                                        <th>Status</th>
+                                                        @if (ShowActionsColumn)
+                                                        {
+                                                            <th>Ações</th>
+                                                        }
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var entry in payroll.Entries)
+                                                    {
+                                                        <tr class="@GetPaidRowClass(entry.IsPaid)">
+                                                            <td>
+                                                                <div class="collaborators-table__identity">
+                                                                    <Avatar Name="@entry.CollaboratorName" Size="AvatarSize.Sm" />
+                                                                    <div>
+                                                                        <p class="collaborators-table__name">@entry.CollaboratorName</p>
+                                                                        <p class="collaborators-table__job-title">@(entry.CareerLevelName ?? "—")</p>
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                            <td class="text-pix-key">@(entry.PixKey ?? "—")</td>
+                                                            <td class="financial-table__total">
+                                                                <FinancialAmountDisplay TotalAmount="@entry.TotalAmount"
+                                                                                        PlatformTotal="@entry.PlatformTotal"
+                                                                                        AmountToReceive="@entry.AmountToReceive" />
+                                                            </td>
+                                                            <td>
+                                                                <div class="financial-table__chips">
+                                                                    @if (entry.IsApproved)
+                                                                    {
+                                                                        <StatusBadge Kind="StatusKind.Approved" />
+                                                                    }
+                                                                    @if (entry.IsPaid)
+                                                                    {
+                                                                        <StatusBadge Kind="StatusKind.Paid" />
+                                                                    }
+                                                                    @if (entry.NfSent)
+                                                                    {
+                                                                        <StatusBadge Kind="StatusKind.NfSent" />
+                                                                    }
+                                                                    else if (entry.IsPaid)
+                                                                    {
+                                                                        <StatusBadge Kind="StatusKind.NfPending" />
+                                                                    }
+                                                                </div>
+                                                            </td>
+                                                            @if (ShowActionsColumn)
+                                                            {
+                                                                <td>
+                                                                    <FinancialEntryActions ShowPayEntry="@payroll.AllowedActions.PayEntry"
+                                                                                           ShowToggleNf="@payroll.AllowedActions.ToggleNf"
+                                                                                           IsPaid="@entry.IsPaid"
+                                                                                           NfSent="@entry.NfSent"
+                                                                                           IsBusy="@_isBusy"
+                                                                                           OnPayEntry="@(() => PayEntryAsync(payroll, entry))"
+                                                                                           OnToggleNf="@(() => ToggleNfAsync(payroll, entry))" />
+                                                                </td>
+                                                            }
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                }
+                            </ChildContent>
+                        </Card>
+                    }
+                }
+            }
+            else
+            {
+                <FinancialProjectCostPanel Payrolls="@_payrolls"
+                                           ProjectNames="@_projectNames"
+                                           ExpandedPayrollIds="@_expandedPayrollIds"
+                                           OnTogglePayroll="TogglePayrollAsync" />
+            }
+        </Tabs>
+    }
+</div>
+
+<PayrollCollaboratorPicker IsOpen="@_pickerOpen"
+                           IsOpenChanged="@OnPickerOpenChangedAsync"
+                           DepartmentId="@_pickerPayroll?.DepartmentId"
+                           ExcludedCollaboratorIds="@_excludedCollaboratorIds"
+                           OnSelected="@AddCollaboratorAsync" />
+
+<Dialog IsOpen="@_deleteDialogOpen" IsOpenChanged="@OnDeleteDialogOpenChangedAsync" Title="Excluir folha">
+    <div class="settings-form">
+        <p class="settings-form__hint">
+            @if (_deleteTarget is not null)
+            {
+                <text>
+                    Tem certeza que deseja excluir a folha de
+                    <strong>@_deleteTarget.DepartmentName — @CompetenceFormatter.Format(_deleteTarget.Month, _deleteTarget.Year)</strong>?
+                    Esta ação não pode ser desfeita.
+                </text>
+            }
+        </p>
+
+        @if (!string.IsNullOrWhiteSpace(_deleteDialogError))
+        {
+            <p class="settings-form__error" role="alert">@_deleteDialogError</p>
+        }
+
+        <div class="settings-form__actions">
+            <Button Variant="ButtonVariant.Outline"
+                    Disabled="@_isBusy"
+                    OnClick="@CloseDeleteDialogAsync">
+                Cancelar
+            </Button>
+            <Button Variant="ButtonVariant.Destructive"
+                    Disabled="@_isBusy"
+                    OnClick="@ConfirmDeleteAsync">
+                @(_isBusy ? "Excluindo..." : "Excluir")
+            </Button>
+        </div>
+    </div>
+</Dialog>
+
+@code {
+    private static readonly string[] _tabItems = ["Colaboradores", "Custo por Projeto"];
+
+    private readonly List<FinancePayrollGroupDto> _payrolls = [];
+    private readonly List<FinanceDepartmentOptionDto> _departments = [];
+    private readonly List<FinanceProjectOptionDto> _projects = [];
+    private readonly HashSet<Guid> _expandedPayrollIds = [];
+    private readonly Dictionary<Guid, string> _projectNames = [];
+    private readonly int[] _yearOptions = BuildYearOptions();
+
+    private bool _isLoading = true;
+    private bool _isBusy;
+    private bool _hasWritePolicy;
+    private bool _hasDeletePolicy;
+    private int _activeTab;
+    private string? _loadError;
+    private string? _actionMessage;
+    private string? _actionError;
+    private string _monthFilter = string.Empty;
+    private string _yearFilter = string.Empty;
+    private string _departmentFilter = string.Empty;
+    private string _projectFilter = string.Empty;
+
+    private bool _pickerOpen;
+    private FinancePayrollGroupDto? _pickerPayroll;
+    private IReadOnlyCollection<Guid> _excludedCollaboratorIds = [];
+
+    private bool _deleteDialogOpen;
+    private FinancePayrollGroupDto? _deleteTarget;
+    private string? _deleteDialogError;
+
+    private decimal TotalToPay => _payrolls.Sum(p => p.AmountToReceive - p.PaidAmount);
+    private decimal TotalPaid => _payrolls.Sum(p => p.PaidAmount);
+    private bool ShowActionsColumn => _payrolls.Any(p => p.AllowedActions.PayEntry || p.AllowedActions.ToggleNf);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAuthPoliciesAsync();
+        await LoadSummaryAsync();
+    }
+
+    private async Task LoadAuthPoliciesAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        _hasWritePolicy = (await AuthorizationService.AuthorizeAsync(user, AppPolicies.PayrollsWrite)).Succeeded;
+        _hasDeletePolicy = (await AuthorizationService.AuthorizeAsync(user, AppPolicies.PayrollsDelete)).Succeeded;
+    }
+
+    private bool CanAddCollaborator(FinancePayrollGroupDto payroll) =>
+        payroll.AllowedActions.AddCollaborator && _hasWritePolicy;
+
+    private bool CanDeletePayroll(FinancePayrollGroupDto payroll) =>
+        payroll.AllowedActions.Delete && _hasDeletePolicy;
+
+    private static int[] BuildYearOptions()
+    {
+        var currentYear = DateTime.UtcNow.Year;
+        return Enumerable.Range(currentYear - 2, 5).Reverse().ToArray();
+    }
+
+    private async Task LoadSummaryAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+        _payrolls.Clear();
+
+        var result = await FinanceApiService.GetSummaryAsync(BuildSummaryQuery());
+        if (result.Status == FinanceApiStatus.Success && result.Summary is not null)
+        {
+            _payrolls.AddRange(result.Summary.Payrolls);
+            UpdateFilterOptions(result.Summary.FilterOptions);
+        }
+        else
+        {
+            _loadError = FinanceErrorMessages.ForSummary(result);
+        }
+
+        _isLoading = false;
+    }
+
+    private void UpdateFilterOptions(FinanceFilterOptionsDto filterOptions)
+    {
+        if (_departments.Count == 0)
+        {
+            _departments.AddRange(filterOptions.Departments.OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase));
+        }
+
+        if (_projects.Count == 0)
+        {
+            _projects.AddRange(filterOptions.Projects.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase));
+        }
+
+        _projectNames.Clear();
+        foreach (var project in filterOptions.Projects)
+        {
+            _projectNames[project.Id] = project.Name;
+        }
+    }
+
+    private FinanceSummaryQuery BuildSummaryQuery() =>
+        new(
+            ParseIntFilter(_monthFilter),
+            ParseIntFilter(_yearFilter),
+            ParseGuidFilter(_departmentFilter),
+            ParseGuidFilter(_projectFilter));
+
+    private static int? ParseIntFilter(string value) =>
+        int.TryParse(value, out var parsed) ? parsed : null;
+
+    private static Guid? ParseGuidFilter(string value) =>
+        Guid.TryParse(value, out var parsed) ? parsed : null;
+
+    private static string GetPaidRowClass(bool isPaid) =>
+        isPaid ? "financial-table__row--paid" : string.Empty;
+
+    private static string GetPayrollCardClass(string status) =>
+        status.Equals("paid", StringComparison.OrdinalIgnoreCase)
+            ? "financial-payroll-card financial-payroll-card--paid"
+            : "financial-payroll-card";
+
+    private void TogglePayroll(Guid payrollId)
+    {
+        if (!_expandedPayrollIds.Add(payrollId))
+        {
+            _expandedPayrollIds.Remove(payrollId);
+        }
+    }
+
+    private Task TogglePayrollAsync(Guid payrollId)
+    {
+        TogglePayroll(payrollId);
+        return Task.CompletedTask;
+    }
+
+    private Task OnActiveTabChangedAsync(int tabIndex)
+    {
+        _activeTab = tabIndex;
+        return Task.CompletedTask;
+    }
+
+    private async Task OpenPickerAsync(FinancePayrollGroupDto payroll)
+    {
+        _actionError = null;
+        _pickerPayroll = payroll;
+
+        _excludedCollaboratorIds = payroll.Entries
+            .Select(entry => entry.CollaboratorId)
+            .ToList();
+
+        _pickerOpen = true;
+    }
+
+    private async Task AddCollaboratorAsync(CollaboratorDto collaborator)
+    {
+        if (_pickerPayroll is null)
+        {
+            return;
+        }
+
+        await RunMutationAsync(
+            () => PayrollApiService.AddCollaboratorEntryAsync(
+                _pickerPayroll.Id,
+                new AddCollaboratorEntryRequestDto(collaborator.Id)),
+            "Colaborador adicionado à lista a pagar.");
+    }
+
+    private Task OpenDeleteDialogAsync(FinancePayrollGroupDto payroll)
+    {
+        _deleteTarget = payroll;
+        _deleteDialogError = null;
+        _deleteDialogOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_deleteTarget is null)
+        {
+            return;
+        }
+
+        _isBusy = true;
+        _deleteDialogError = null;
+
+        var result = await PayrollApiService.DeletePayrollAsync(_deleteTarget.Id);
+        if (result.Status == PayrollApiStatus.Success)
+        {
+            _deleteDialogOpen = false;
+            _deleteTarget = null;
+            _actionMessage = "Folha excluída.";
+            await LoadSummaryAsync();
+        }
+        else
+        {
+            _deleteDialogError = PayrollErrorMessages.ForDelete(result);
+        }
+
+        _isBusy = false;
+    }
+
+    private Task OnPickerOpenChangedAsync(bool isOpen)
+    {
+        _pickerOpen = isOpen;
+        if (!isOpen)
+        {
+            _pickerPayroll = null;
+            _excludedCollaboratorIds = [];
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task OnDeleteDialogOpenChangedAsync(bool isOpen)
+    {
+        _deleteDialogOpen = isOpen;
+        if (!isOpen)
+        {
+            _deleteTarget = null;
+            _deleteDialogError = null;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task CloseDeleteDialogAsync()
+    {
+        _deleteDialogOpen = false;
+        _deleteTarget = null;
+        _deleteDialogError = null;
+        return Task.CompletedTask;
+    }
+
+    private async Task PayEntryAsync(FinancePayrollGroupDto payroll, FinanceEntryDto entry)
+    {
+        await RunMutationAsync(
+            () => PayrollApiService.PayEntryAsync(
+                payroll.Id,
+                entry.Id,
+                new SetEntryPaidRequestDto(!entry.IsPaid)),
+            entry.IsPaid ? "Pagamento desmarcado." : "Colaborador marcado como pago.");
+    }
+
+    private async Task ToggleNfAsync(FinancePayrollGroupDto payroll, FinanceEntryDto entry)
+    {
+        await RunMutationAsync(
+            () => PayrollApiService.SetEntryNfAsync(
+                payroll.Id,
+                entry.Id,
+                new SetEntryNfRequestDto(!entry.NfSent)),
+            entry.NfSent ? "NF desmarcada." : "NF marcada como enviada.");
+    }
+
+    private async Task RunMutationAsync(
+        Func<Task<PayrollMutationResult>> action,
+        string successMessage)
+    {
+        _isBusy = true;
+        _actionError = null;
+        _actionMessage = null;
+
+        var result = await action();
+        if (result.Status == PayrollApiStatus.Success)
+        {
+            _actionMessage = successMessage;
+            await LoadSummaryAsync();
+        }
+        else
+        {
+            _actionError = PayrollErrorMessages.ForMutation(result);
+        }
+
+        _isBusy = false;
+    }
+
+    private async Task OnMonthFilterChangedAsync(string? value)
+    {
+        _monthFilter = value ?? string.Empty;
+        await LoadSummaryAsync();
+    }
+
+    private async Task OnYearFilterChangedAsync(string? value)
+    {
+        _yearFilter = value ?? string.Empty;
+        await LoadSummaryAsync();
+    }
+
+    private async Task OnDepartmentFilterChangedAsync(string? value)
+    {
+        _departmentFilter = value ?? string.Empty;
+        await LoadSummaryAsync();
+    }
+
+    private async Task OnProjectFilterChangedAsync(string? value)
+    {
+        _projectFilter = value ?? string.Empty;
+        await LoadSummaryAsync();
+    }
+}

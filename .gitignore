@@ -1,0 +1,139 @@
+# CorePay — .NET 10 / Blazor WASM / SQL Server (Docker)
+
+## Build
+[Bb]in/
+[Oo]bj/
+# WSL/Windows: dotnet pode criar pastas literais bin\Debug (barra invertida no nome)
+**/[Bb]in\\Debug/
+**/[Bb]in\\Release/
+**/[Oo]bj\\Debug/
+**/[Oo]bj\\Release/
+[Oo]ut/
+[Ll]og/
+[Ll]ogs/
+artifacts/
+*.dll
+*.exe
+*.pdb
+*.cache
+*.ilk
+*.meta
+*.obj
+*.iobj
+*.ipdb
+*.pgc
+*.pgd
+*.rsp
+*.sbr
+*.tlb
+*.tli
+*.tlh
+*.tmp
+*.tmp_proj
+*_wpftmp.csproj
+*.log
+*.tlog
+*.vspscc
+*.vssscc
+.builds
+*.pidb
+*.svclog
+*.scc
+
+## Visual Studio / Rider / VS Code
+.vs/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.sln.docstates
+*.suo
+*.user
+*.userosscache
+*.sln.iml
+*.DotSettings.user
+*.rsuser
+*.userprefs
+project.lock.json
+project.fragment.lock.json
+
+## NuGet
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+*.nuget.props
+*.nuget.targets
+.nuget/
+
+## Test / coverage
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.trx
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+coverage*.info
+*.opencover.xml
+TestResult.xml
+nunit-*.xml
+
+## Publish / Blazor WASM
+publish/
+PublishScripts/
+wwwroot/dist/
+**/wwwroot/css/bootstrap/
+App_Data/
+App_Browsers/
+
+## Secrets e configuração local
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.key
+*.pem
+# appsettings.json (base) fica versionado; appsettings.Development.json é só local.
+**/appsettings.Development.json
+**/appsettings.Production.json
+**/appsettings.Staging.json
+**/appsettings.*.local.json
+secrets.json
+
+# ASP.NET user-secrets (pasta local do SDK; nunca versionar)
+*.secret.json
+
+## Docker / SQL Server
+docker-data/
+*.mdf
+*.ldf
+*.ndf
+*.bak
+
+## OS
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+*~
+.nfs*
+
+## Ferramentas / agentes
+*.swp
+*.swo
+.cursor/debug*
+.playwright-mcp/
+.git-rewrite/
+node_modules/
+
+## Misc
+*.db
+*.db-shm
+*.db-wal
+BenchmarkDotNet.Artifacts/
+HealthChecks/
+StyleCopReport.xml

@@ -1,0 +1,163 @@
+@inject IDepartmentApiService DepartmentApiService
+
+<Card Class="settings-section-card">
+    <HeaderContent>
+        <SectionCardHeader Title="Setores" Icon="IconKind.Building2">
+            <Actions>
+                <Button Size="ButtonSize.Sm" OnClick="@OpenCreateDialogAsync">
+                    Novo setor
+                </Button>
+            </Actions>
+        </SectionCardHeader>
+    </HeaderContent>
+    <ChildContent>
+        @if (_isLoading)
+        {
+            <div class="settings-section__loading">
+                <Spinner Label="Carregando setores..." />
+            </div>
+        }
+        else if (!string.IsNullOrWhiteSpace(_loadError))
+        {
+            <EmptyState Title="Erro ao carregar setores" Description="@_loadError" />
+        }
+        else if (_departments.Count == 0)
+        {
+            <EmptyState Title="Nenhum setor cadastrado"
+                        Description="Crie o primeiro setor para configurar os perfis de cálculo." />
+        }
+        else
+        {
+            <div class="settings-table-wrapper">
+                <table class="settings-table">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Perfil</th>
+                            <th>% meta</th>
+                            <th>Limiar</th>
+                            <th>Acréscimo</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var department in _departments)
+                        {
+                            <tr>
+                                <td>@department.Name</td>
+                                <td>@CalculationProfileLabels.GetLabel(department.CalculationType)</td>
+                                <td class="text-table-money">@DecimalInputParser.FormatDecimal(department.GoalBonusPercentage)%</td>
+                                <td class="text-table-money">@MoneyFormatter.FormatMoney(department.LowRevenueThreshold)</td>
+                                <td class="text-table-money">@DecimalInputParser.FormatDecimal(department.LowRevenueBonusPct)%</td>
+                                <td>
+                                    <StatusBadge Kind="@(department.IsActive ? StatusKind.Active : StatusKind.Inactive)" />
+                                </td>
+                                <td class="settings-table__actions">
+                                    <Button Variant="ButtonVariant.Ghost"
+                                            Size="ButtonSize.Sm"
+                                            OnClick="@(() => OpenEditDialogAsync(department))">
+                                        Editar
+                                    </Button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </ChildContent>
+</Card>
+
+<DepartmentFormDialog IsOpen="@_dialogOpen"
+                      IsOpenChanged="@OnDialogOpenChangedAsync"
+                      EditTarget="@_editTarget"
+                      IsSaving="@_isSaving"
+                      ErrorMessage="@_formError"
+                      OnSubmit="@SaveAsync" />
+
+@code {
+    private readonly List<DepartmentDto> _departments = [];
+    private bool _isLoading = true;
+    private string? _loadError;
+    private bool _dialogOpen;
+    private bool _isSaving;
+    private string? _formError;
+    private DepartmentDto? _editTarget;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDepartmentsAsync();
+    }
+
+    private async Task LoadDepartmentsAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+
+        var result = await DepartmentApiService.GetDepartmentsAsync();
+        _departments.Clear();
+
+        if (result.Status == DepartmentApiStatus.Success && result.Departments is not null)
+        {
+            _departments.AddRange(result.Departments);
+        }
+        else
+        {
+            _loadError = DepartmentErrorMessages.ForList(result);
+        }
+
+        _isLoading = false;
+    }
+
+    private Task OpenCreateDialogAsync()
+    {
+        _editTarget = null;
+        _formError = null;
+        _dialogOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private Task OpenEditDialogAsync(DepartmentDto department)
+    {
+        _editTarget = department;
+        _formError = null;
+        _dialogOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private Task OnDialogOpenChangedAsync(bool isOpen)
+    {
+        _dialogOpen = isOpen;
+        if (!isOpen)
+        {
+            _editTarget = null;
+            _formError = null;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task SaveAsync(DepartmentRequest request)
+    {
+        _isSaving = true;
+        _formError = null;
+
+        DepartmentMutationResult result = _editTarget is null
+            ? await DepartmentApiService.CreateDepartmentAsync(request)
+            : await DepartmentApiService.UpdateDepartmentAsync(_editTarget.Id, request);
+
+        if (result.Status == DepartmentApiStatus.Success && result.Department is not null)
+        {
+            _dialogOpen = false;
+            _editTarget = null;
+            await LoadDepartmentsAsync();
+        }
+        else
+        {
+            _formError = DepartmentErrorMessages.ForMutation(result);
+        }
+
+        _isSaving = false;
+    }
+}

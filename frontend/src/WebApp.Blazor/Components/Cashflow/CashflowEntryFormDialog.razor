@@ -1,0 +1,343 @@
+@using WebApp.Blazor.Formatting
+
+<Dialog IsOpen="@IsOpen" IsOpenChanged="@IsOpenChanged" Title="@DialogTitle" IsWide="true">
+    <div class="settings-form">
+        @if (!string.IsNullOrWhiteSpace(DisplayError))
+        {
+            <p class="settings-form__error" role="alert">@DisplayError</p>
+        }
+
+        <div class="cashflow-type-segmented" role="group" aria-label="Tipo de lançamento">
+            <button type="button"
+                    class="cashflow-type-segmented__option @(_type == CashflowEntryType.Entrada ? "cashflow-type-segmented__option--active-entrada" : string.Empty)"
+                    disabled="@IsSaving"
+                    @onclick="@(() => SetTypeAsync(CashflowEntryType.Entrada))">
+                Entrada
+            </button>
+            <button type="button"
+                    class="cashflow-type-segmented__option @(_type == CashflowEntryType.Saida ? "cashflow-type-segmented__option--active-saida" : string.Empty)"
+                    disabled="@IsSaving"
+                    @onclick="@(() => SetTypeAsync(CashflowEntryType.Saida))">
+                Saída
+            </button>
+        </div>
+
+        <Select Label="Categoria"
+                Value="@_categoryValue"
+                ValueChanged="@OnCategoryChangedAsync"
+                Disabled="@IsSaving">
+            @foreach (var category in CashflowCategoryLabels.GetCategoriesForType(_type))
+            {
+                <option value="@category">@CashflowCategoryLabels.GetLabel(category)</option>
+            }
+        </Select>
+
+        <Input Label="@AmountLabel"
+               IsMoney="true"
+               Value="@_amount"
+               ValueChanged="@(value => _amount = value ?? string.Empty)"
+               Disabled="@IsSaving" />
+
+        <div class="cashflow-form__row">
+            <Input Label="Data"
+                   Type="date"
+                   Value="@_transactionDate"
+                   ValueChanged="@(value => _transactionDate = value ?? string.Empty)"
+                   Disabled="@IsSaving" />
+            <Select Label="Mês"
+                    Value="@_monthValue"
+                    ValueChanged="@(value => _monthValue = value ?? string.Empty)"
+                    Disabled="@IsSaving">
+                @for (var month = 1; month <= 12; month++)
+                {
+                    <option value="@month">@CompetenceFormatter.Format(month, 2000).Split('/')[0]</option>
+                }
+            </Select>
+            <Select Label="Ano"
+                    Value="@_yearValue"
+                    ValueChanged="@(value => _yearValue = value ?? string.Empty)"
+                    Disabled="@IsSaving">
+                @foreach (var year in YearOptions)
+                {
+                    <option value="@year">@year</option>
+                }
+            </Select>
+        </div>
+
+        <Select Label="Projeto (opcional)"
+                Value="@_projectValue"
+                ValueChanged="@(value => _projectValue = value ?? string.Empty)"
+                Disabled="@IsSaving">
+            <option value="">Sem projeto</option>
+            @foreach (var project in FilterOptions.Projects)
+            {
+                <option value="@project.Id">@project.Name</option>
+            }
+        </Select>
+
+        @if (_type == CashflowEntryType.Saida)
+        {
+            <Select Label="Forma de pagamento"
+                    Value="@_paymentMethodValue"
+                    ValueChanged="@(value => _paymentMethodValue = value ?? string.Empty)"
+                    Disabled="@IsSaving">
+                <option value="">Selecione</option>
+                @foreach (var method in FilterOptions.PaymentMethods)
+                {
+                    <option value="@method.Id">@method.Name</option>
+                }
+            </Select>
+
+            <Select Label="Setor"
+                    Value="@_departmentValue"
+                    ValueChanged="@(value => _departmentValue = value ?? string.Empty)"
+                    Disabled="@IsSaving">
+                <option value="">Selecione</option>
+                @foreach (var department in FilterOptions.Departments)
+                {
+                    <option value="@department.Id">@department.Name</option>
+                }
+            </Select>
+
+            <Input Label="Solicitante"
+                   Value="@_requester"
+                   ValueChanged="@(value => _requester = value ?? string.Empty)"
+                   Disabled="@IsSaving" />
+
+            <Input Label="Local de compra"
+                   Value="@_purchaseLocation"
+                   ValueChanged="@(value => _purchaseLocation = value ?? string.Empty)"
+                   Disabled="@IsSaving" />
+
+            @if (EditTarget is null)
+            {
+                <Input Label="Parcelas"
+                       Kind="NumericInputKind.Integer"
+                       Value="@_installmentTotal"
+                       ValueChanged="@(value => _installmentTotal = value ?? "1")"
+                       Disabled="@IsSaving" />
+            }
+
+            <Input Label="URL do anexo (opcional)"
+                   Value="@_attachmentUrl"
+                   ValueChanged="@(value => _attachmentUrl = value ?? string.Empty)"
+                   Disabled="@IsSaving" />
+        }
+
+        <div class="ui-field">
+            <label class="text-label ui-field__label" for="@NotesId">Observações</label>
+            <textarea id="@NotesId"
+                      class="ui-input cashflow-form__notes"
+                      rows="3"
+                      placeholder="Observações opcionais"
+                      disabled="@IsSaving"
+                      @bind="_notes"></textarea>
+        </div>
+
+        <FormDialogActions IsSaving="@IsSaving"
+                           SubmitLabel="@(IsSaving ? "Salvando..." : "Salvar")"
+                           OnSubmit="@SubmitAsync"
+                           OnCancel="@CancelAsync" />
+    </div>
+</Dialog>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+    [Parameter] public CashflowEntryDto? EditTarget { get; set; }
+    [Parameter] public CashflowFilterOptionsDto FilterOptions { get; set; } = new([], [], []);
+    [Parameter] public int[] YearOptions { get; set; } = [];
+    [Parameter] public int DefaultMonth { get; set; }
+    [Parameter] public int DefaultYear { get; set; }
+    [Parameter] public bool IsSaving { get; set; }
+    [Parameter] public string? ErrorMessage { get; set; }
+    [Parameter] public EventCallback<CashflowCreateRequest> OnCreate { get; set; }
+    [Parameter] public EventCallback<CashflowUpdateRequest> OnUpdate { get; set; }
+
+    private CashflowEntryType _type = CashflowEntryType.Entrada;
+    private string _categoryValue = CashflowEntryCategory.Plataforma.ToString();
+    private string _amount = string.Empty;
+    private string _transactionDate = string.Empty;
+    private string _monthValue = string.Empty;
+    private string _yearValue = string.Empty;
+    private string _projectValue = string.Empty;
+    private string _paymentMethodValue = string.Empty;
+    private string _departmentValue = string.Empty;
+    private string _requester = string.Empty;
+    private string _purchaseLocation = string.Empty;
+    private string _installmentTotal = "1";
+    private string _attachmentUrl = string.Empty;
+    private string _notes = string.Empty;
+    private string? _localError;
+    private readonly string NotesId = $"cashflow-notes-{Guid.NewGuid():N}";
+
+    private string DialogTitle => EditTarget is null ? "Novo lançamento" : "Editar lançamento";
+    private string? DisplayError => _localError ?? ErrorMessage;
+    private string AmountLabel => EditTarget is null && _type == CashflowEntryType.Saida && ParseInstallmentTotal() > 1
+        ? "Valor total da compra"
+        : "Valor";
+
+    protected override void OnParametersSet()
+    {
+        if (!IsOpen)
+        {
+            return;
+        }
+
+        _localError = null;
+
+        if (EditTarget is null)
+        {
+            ResetForCreate();
+            return;
+        }
+
+        _type = EditTarget.Type;
+        _categoryValue = EditTarget.Category.ToString();
+        _amount = DecimalInputParser.FormatMoneyInput(EditTarget.Amount);
+        _transactionDate = EditTarget.TransactionDate.ToString("yyyy-MM-dd");
+        _monthValue = EditTarget.Month.ToString();
+        _yearValue = EditTarget.Year.ToString();
+        _projectValue = EditTarget.ProjectId?.ToString() ?? string.Empty;
+        _paymentMethodValue = EditTarget.PaymentMethodId?.ToString() ?? string.Empty;
+        _departmentValue = EditTarget.DepartmentId?.ToString() ?? string.Empty;
+        _requester = EditTarget.Requester ?? string.Empty;
+        _purchaseLocation = EditTarget.PurchaseLocation ?? string.Empty;
+        _attachmentUrl = EditTarget.AttachmentUrl ?? string.Empty;
+        _notes = EditTarget.Notes ?? string.Empty;
+    }
+
+    private void ResetForCreate()
+    {
+        _type = CashflowEntryType.Entrada;
+        _categoryValue = CashflowEntryCategory.Plataforma.ToString();
+        _amount = string.Empty;
+        _transactionDate = $"{DefaultYear:D4}-{DefaultMonth:D2}-01";
+        _monthValue = DefaultMonth.ToString();
+        _yearValue = DefaultYear.ToString();
+        _projectValue = string.Empty;
+        _paymentMethodValue = string.Empty;
+        _departmentValue = string.Empty;
+        _requester = string.Empty;
+        _purchaseLocation = string.Empty;
+        _installmentTotal = "1";
+        _attachmentUrl = string.Empty;
+        _notes = string.Empty;
+    }
+
+    private Task SetTypeAsync(CashflowEntryType type)
+    {
+        _type = type;
+        var categories = CashflowCategoryLabels.GetCategoriesForType(type);
+        if (!categories.Contains(Enum.Parse<CashflowEntryCategory>(_categoryValue)))
+        {
+            _categoryValue = categories[0].ToString();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task OnCategoryChangedAsync(string? value)
+    {
+        _categoryValue = value ?? CashflowEntryCategory.Plataforma.ToString();
+        return Task.CompletedTask;
+    }
+
+    private async Task SubmitAsync()
+    {
+        _localError = null;
+
+        if (!DecimalInputParser.TryParse(_amount, out var amount) || amount <= 0)
+        {
+            _localError = "Informe um valor maior que zero.";
+            return;
+        }
+
+        if (!int.TryParse(_monthValue, out var month) || !int.TryParse(_yearValue, out var year))
+        {
+            _localError = "Selecione mês e ano válidos.";
+            return;
+        }
+
+        if (!DateOnly.TryParse(_transactionDate, out var transactionDate))
+        {
+            _localError = "Informe uma data válida.";
+            return;
+        }
+
+        if (!Enum.TryParse<CashflowEntryCategory>(_categoryValue, out var category))
+        {
+            _localError = "Selecione uma categoria válida.";
+            return;
+        }
+
+        var projectId = Guid.TryParse(_projectValue, out var parsedProject) ? parsedProject : (Guid?)null;
+        var paymentMethodId = Guid.TryParse(_paymentMethodValue, out var parsedMethod) ? parsedMethod : (Guid?)null;
+        var departmentId = Guid.TryParse(_departmentValue, out var parsedDepartment) ? parsedDepartment : (Guid?)null;
+
+        if (_type == CashflowEntryType.Saida)
+        {
+            if (paymentMethodId is null)
+            {
+                _localError = "Selecione a forma de pagamento.";
+                return;
+            }
+
+            if (departmentId is null)
+            {
+                _localError = "Selecione o setor.";
+                return;
+            }
+        }
+
+        if (EditTarget is null)
+        {
+            var createRequest = new CashflowCreateRequest(
+                _type,
+                category,
+                amount,
+                transactionDate,
+                month,
+                year,
+                projectId,
+                paymentMethodId,
+                departmentId,
+                NullIfEmpty(_requester),
+                NullIfEmpty(_purchaseLocation),
+                ParseInstallmentTotal(),
+                NullIfEmpty(_attachmentUrl),
+                NullIfEmpty(_notes));
+
+            await OnCreate.InvokeAsync(createRequest);
+            return;
+        }
+
+        var updateRequest = new CashflowUpdateRequest(
+            _type,
+            category,
+            amount,
+            transactionDate,
+            month,
+            year,
+            projectId,
+            paymentMethodId,
+            departmentId,
+            NullIfEmpty(_requester),
+            NullIfEmpty(_purchaseLocation),
+            NullIfEmpty(_attachmentUrl),
+            NullIfEmpty(_notes));
+
+        await OnUpdate.InvokeAsync(updateRequest);
+    }
+
+    private int ParseInstallmentTotal() =>
+        DecimalInputParser.TryParseInt(_installmentTotal, out var parsed) && parsed > 0 ? parsed : 1;
+
+    private static string? NullIfEmpty(string value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private async Task CancelAsync()
+    {
+        await IsOpenChanged.InvokeAsync(false);
+    }
+}

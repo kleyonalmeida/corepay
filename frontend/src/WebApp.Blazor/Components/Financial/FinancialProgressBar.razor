@@ -1,0 +1,12 @@
+<div class="financial-progress" aria-hidden="true">
+    <div class="financial-progress__fill" style="@($"width: {ProgressPercent}%")"></div>
+</div>
+<span class="financial-progress__label tabular-nums">@PaidCount/@EntryCount</span>
+
+@code {
+    [Parameter] public int PaidCount { get; set; }
+    [Parameter] public int EntryCount { get; set; }
+
+    private int ProgressPercent =>
+        EntryCount == 0 ? 0 : (int)Math.Round(PaidCount * 100m / EntryCount, MidpointRounding.AwayFromZero);
+}

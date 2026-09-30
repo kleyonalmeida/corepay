@@ -1,0 +1,33 @@
+<div class="ui-tabs">
+    <div class="ui-tabs__list" role="tablist" aria-label="@AriaLabel">
+        @for (var index = 0; index < Items.Length; index++)
+        {
+            var tabIndex = index;
+            var isActive = tabIndex == ActiveTab;
+            <button type="button"
+                    class="ui-tabs__trigger @(isActive ? "ui-tabs__trigger--active" : null)"
+                    role="tab"
+                    aria-selected="@isActive.ToString().ToLowerInvariant()"
+                    @onclick="() => SelectTabAsync(tabIndex)">
+                @Items[tabIndex]
+            </button>
+        }
+    </div>
+    <div class="ui-tabs__panel" role="tabpanel">
+        @ChildContent
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string[] Items { get; set; } = [];
+    [Parameter] public int ActiveTab { get; set; }
+    [Parameter] public EventCallback<int> ActiveTabChanged { get; set; }
+    [Parameter] public string AriaLabel { get; set; } = "Abas";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private async Task SelectTabAsync(int index)
+    {
+        ActiveTab = index;
+        await ActiveTabChanged.InvokeAsync(index);
+    }
+}

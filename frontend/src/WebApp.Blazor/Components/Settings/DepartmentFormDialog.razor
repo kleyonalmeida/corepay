@@ -1,0 +1,173 @@
+<Dialog IsOpen="@IsOpen" IsOpenChanged="@IsOpenChanged" Title="@DialogTitle">
+    <div class="settings-form">
+        @if (!string.IsNullOrWhiteSpace(DisplayError))
+        {
+            <p class="settings-form__error" role="alert">@DisplayError</p>
+        }
+
+        <Input Label="Nome"
+               Placeholder="Nome do setor"
+               Value="@_name"
+               ValueChanged="@(value => _name = value ?? string.Empty)" />
+
+        <Select Label="Perfil de cálculo"
+                Value="@_calculationTypeValue"
+                ValueChanged="@OnCalculationTypeChangedAsync">
+            @foreach (var profile in CalculationProfileLabels.AllProfiles)
+            {
+                <option value="@profile.ToString()">@CalculationProfileLabels.GetLabel(profile)</option>
+            }
+        </Select>
+
+        <Input Label="% bônus de meta"
+               Kind="NumericInputKind.Percent"
+               Placeholder="0"
+               Value="@_goalBonusPercentage"
+               ValueChanged="@(value => _goalBonusPercentage = value ?? string.Empty)" />
+
+        <Input Label="Limiar de baixo faturamento"
+               IsMoney="true"
+               Placeholder="200.000,00"
+               Value="@_lowRevenueThreshold"
+               ValueChanged="@(value => _lowRevenueThreshold = value ?? string.Empty)" />
+
+        <Input Label="Acréscimo de baixo faturamento (%)"
+               Kind="NumericInputKind.Percent"
+               Placeholder="0,4"
+               Value="@_lowRevenueBonusPct"
+               ValueChanged="@(value => _lowRevenueBonusPct = value ?? string.Empty)" />
+
+        <Input Label="Descrição"
+               Placeholder="Descrição opcional"
+               Value="@_description"
+               ValueChanged="@(value => _description = value ?? string.Empty)" />
+
+        <div class="settings-form__toggles">
+            <GoalToggle Label="Ativo" Value="@_isActive" ValueChanged="@(value => _isActive = value)" />
+            <GoalToggle Label="Fixo rateado" Value="@_isAllocatedFixed" ValueChanged="@(value => _isAllocatedFixed = value)" />
+            <GoalToggle Label="Roteia fixo para Lima Karttos"
+                        Value="@_routesFixedToLimaKarttos"
+                        ValueChanged="@(value => _routesFixedToLimaKarttos = value)" />
+        </div>
+
+        <FormDialogActions IsSaving="@IsSaving"
+                           SubmitLabel="@(IsSaving ? "Salvando..." : "Salvar")"
+                           OnSubmit="@SubmitAsync"
+                           OnCancel="@CancelAsync" />
+    </div>
+</Dialog>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+    [Parameter] public DepartmentDto? EditTarget { get; set; }
+    [Parameter] public bool IsSaving { get; set; }
+    [Parameter] public string? ErrorMessage { get; set; }
+    [Parameter] public EventCallback<DepartmentRequest> OnSubmit { get; set; }
+
+    private string _name = string.Empty;
+    private string _calculationTypeValue = CalculationProfile.CommercialAnalyst.ToString();
+    private string _goalBonusPercentage = "0";
+    private string _lowRevenueThreshold = DecimalInputParser.FormatMoneyInput(200_000m);
+    private string _lowRevenueBonusPct = "0,4";
+    private string _description = string.Empty;
+    private bool _isActive = true;
+    private bool _isAllocatedFixed;
+    private bool _routesFixedToLimaKarttos;
+    private string? _localError;
+
+    private string DialogTitle => EditTarget is null ? "Novo setor" : "Editar setor";
+    private string? DisplayError => _localError ?? ErrorMessage;
+
+    protected override void OnParametersSet()
+    {
+        if (!IsOpen)
+        {
+            return;
+        }
+
+        _localError = null;
+
+        if (EditTarget is null)
+        {
+            ResetForCreate();
+            return;
+        }
+
+        _name = EditTarget.Name;
+        _calculationTypeValue = EditTarget.CalculationType.ToString();
+        _goalBonusPercentage = DecimalInputParser.FormatDecimal(EditTarget.GoalBonusPercentage);
+        _lowRevenueThreshold = DecimalInputParser.FormatMoneyInput(EditTarget.LowRevenueThreshold);
+        _lowRevenueBonusPct = DecimalInputParser.FormatDecimal(EditTarget.LowRevenueBonusPct);
+        _description = EditTarget.Description ?? string.Empty;
+        _isActive = EditTarget.IsActive;
+        _isAllocatedFixed = EditTarget.IsAllocatedFixed;
+        _routesFixedToLimaKarttos = EditTarget.RoutesFixedToLimaKarttos;
+    }
+
+    private void ResetForCreate()
+    {
+        _name = string.Empty;
+        _calculationTypeValue = CalculationProfile.CommercialAnalyst.ToString();
+        _goalBonusPercentage = "0";
+        _lowRevenueThreshold = DecimalInputParser.FormatMoneyInput(200_000m);
+        _lowRevenueBonusPct = "0,4";
+        _description = string.Empty;
+        _isActive = true;
+        _isAllocatedFixed = false;
+        _routesFixedToLimaKarttos = false;
+    }
+
+    private Task OnCalculationTypeChangedAsync(string? value)
+    {
+        _calculationTypeValue = value ?? CalculationProfile.CommercialAnalyst.ToString();
+        return Task.CompletedTask;
+    }
+
+    private async Task CancelAsync()
+    {
+        IsOpen = false;
+        await IsOpenChanged.InvokeAsync(false);
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (!Enum.TryParse<CalculationProfile>(_calculationTypeValue, out var calculationType))
+        {
+            calculationType = CalculationProfile.CommercialAnalyst;
+        }
+
+        if (!DecimalInputParser.TryParse(_goalBonusPercentage, out var goalBonusPercentage)
+            || !DecimalInputParser.TryParse(_lowRevenueThreshold, out var lowRevenueThreshold)
+            || !DecimalInputParser.TryParse(_lowRevenueBonusPct, out var lowRevenueBonusPct))
+        {
+            _localError = "Informe valores numéricos válidos.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_name))
+        {
+            _localError = "O nome é obrigatório.";
+            return;
+        }
+
+        if (goalBonusPercentage < 0 || lowRevenueThreshold < 0 || lowRevenueBonusPct < 0)
+        {
+            _localError = "Valores numéricos não podem ser negativos.";
+            return;
+        }
+
+        var request = new DepartmentRequest(
+            _name.Trim(),
+            calculationType,
+            goalBonusPercentage,
+            lowRevenueThreshold,
+            lowRevenueBonusPct,
+            string.IsNullOrWhiteSpace(_description) ? null : _description.Trim(),
+            _isActive,
+            _isAllocatedFixed,
+            _routesFixedToLimaKarttos);
+
+        await OnSubmit.InvokeAsync(request);
+    }
+}

@@ -1,0 +1,87 @@
+<Dialog IsOpen="@IsOpen" IsOpenChanged="@IsOpenChanged" Title="Grupo de parcelas" IsWide="true">
+    @if (_isLoading)
+    {
+        <div class="settings-section__loading">
+            <Spinner Label="Carregando parcelas..." />
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(_loadError))
+    {
+        <EmptyState Title="Erro ao carregar parcelas" Description="@_loadError" />
+    }
+    else if (_entries.Count == 0)
+    {
+        <EmptyState Title="Nenhuma parcela encontrada" Description="Este grupo não possui lançamentos." />
+    }
+    else
+    {
+        <div class="settings-table-wrapper">
+            <table class="settings-table cashflow-table">
+                <thead>
+                    <tr>
+                        <th>Parcela</th>
+                        <th>Competência</th>
+                        <th>Data</th>
+                        <th class="cashflow-table__money">Valor</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var entry in _entries)
+                    {
+                        <tr>
+                            <td class="tabular-nums">@entry.InstallmentNumber/@entry.InstallmentTotal</td>
+                            <td class="tabular-nums">@CompetenceFormatter.Format(entry.Month, entry.Year)</td>
+                            <td class="tabular-nums">@DateFormatter.FormatDate(entry.TransactionDate)</td>
+                            <td class="cashflow-table__money cashflow-table__saida text-table-money tabular-nums">
+                                @MoneyFormatter.FormatMoney(entry.Amount)
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</Dialog>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+    [Parameter] public Guid? CompraId { get; set; }
+    [Inject] private ICashflowApiService CashflowApiService { get; set; } = null!;
+
+    private readonly List<CashflowEntryDto> _entries = [];
+    private bool _isLoading;
+    private string? _loadError;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen && CompraId is not null)
+        {
+            await LoadGroupAsync(CompraId.Value);
+        }
+        else if (!IsOpen)
+        {
+            _entries.Clear();
+            _loadError = null;
+        }
+    }
+
+    private async Task LoadGroupAsync(Guid compraId)
+    {
+        _isLoading = true;
+        _loadError = null;
+        _entries.Clear();
+
+        var result = await CashflowApiService.GetInstallmentGroupAsync(compraId);
+        if (result.Status == CashflowApiStatus.Success && result.Entries is not null)
+        {
+            _entries.AddRange(result.Entries);
+        }
+        else
+        {
+            _loadError = "Não foi possível carregar o grupo de parcelas.";
+        }
+
+        _isLoading = false;
+    }
+}

@@ -1,0 +1,297 @@
+<Dialog IsOpen="@IsOpen" IsOpenChanged="@IsOpenChanged" Title="@DialogTitle" IsWide="true">
+    <div class="settings-form collaborator-form">
+        @if (!string.IsNullOrWhiteSpace(DisplayError))
+        {
+            <p class="settings-form__error" role="alert">@DisplayError</p>
+        }
+
+        <div class="collaborator-form__photo">
+            <Avatar Name="@_name" ImageUrl="@_photoUrl" Size="AvatarSize.Md" />
+            <Input Label="URL da foto"
+                   Placeholder="https://..."
+                   Value="@_photoUrl"
+                   ValueChanged="@(value => _photoUrl = value ?? string.Empty)" />
+        </div>
+
+        <Input Label="Nome"
+               Placeholder="Nome completo"
+               Value="@_name"
+               ValueChanged="@(value => _name = value ?? string.Empty)" />
+
+        <Select Label="Setor"
+                Value="@_departmentValue"
+                ValueChanged="@OnDepartmentChangedAsync">
+            <option value="">Selecione um setor</option>
+            @foreach (var department in Departments)
+            {
+                <option value="@department.Id">@department.Name</option>
+            }
+        </Select>
+
+        <Select Label="Nível de carreira"
+                Value="@_careerLevelValue"
+                ValueChanged="@(value => _careerLevelValue = value ?? string.Empty)">
+            <option value="">—</option>
+            @foreach (var level in FilteredCareerLevels)
+            {
+                <option value="@level.Id">@level.Name</option>
+            }
+        </Select>
+
+        <Input Label="Cargo"
+               Placeholder="Cargo opcional"
+               Value="@_jobTitle"
+               ValueChanged="@(value => _jobTitle = value ?? string.Empty)" />
+
+        <Input Label="Admissão"
+               Type="date"
+               Value="@_admissionDate"
+               ValueChanged="@(value => _admissionDate = value ?? string.Empty)" />
+
+        <Input Label="Demissão"
+               Type="date"
+               Disabled="@_isActive"
+               Value="@_dismissalDate"
+               ValueChanged="@(value => _dismissalDate = value ?? string.Empty)" />
+
+        <Input Label="PIX"
+               Placeholder="Chave PIX"
+               Value="@_pixKey"
+               ValueChanged="@(value => _pixKey = value ?? string.Empty)" />
+
+        <Input Label="Salário"
+               IsMoney="true"
+               Placeholder="0,00"
+               Value="@_baseSalary"
+               ValueChanged="@(value => _baseSalary = value ?? string.Empty)" />
+
+        <Input Label="E-mail"
+               Type="email"
+               Placeholder="email@empresa.com"
+               Value="@_email"
+               ValueChanged="@(value => _email = value ?? string.Empty)" />
+
+        <Select Label="Override de perfil"
+                Value="@_profileOverrideValue"
+                ValueChanged="@(value => _profileOverrideValue = value ?? string.Empty)">
+            <option value="">Padrão (setor + nível)</option>
+            @foreach (var profile in CalculationProfileLabels.AllProfiles)
+            {
+                <option value="@profile.ToString()">@CalculationProfileLabels.GetLabel(profile)</option>
+            }
+        </Select>
+
+        <div class="settings-form__toggles">
+            <GoalToggle Label="Ativo"
+                        Value="@_isActive"
+                        ValueChanged="@OnActiveChangedAsync" />
+        </div>
+
+        <FormDialogActions IsSaving="@IsSaving"
+                           SubmitLabel="@(IsSaving ? "Salvando..." : "Salvar")"
+                           OnSubmit="@SubmitAsync"
+                           OnCancel="@CancelAsync" />
+    </div>
+</Dialog>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+    [Parameter] public CollaboratorDto? EditTarget { get; set; }
+    [Parameter] public IReadOnlyList<DepartmentDto> Departments { get; set; } = [];
+    [Parameter] public IReadOnlyList<CareerLevelDto> CareerLevels { get; set; } = [];
+    [Parameter] public bool IsSaving { get; set; }
+    [Parameter] public string? ErrorMessage { get; set; }
+    [Parameter] public EventCallback<CollaboratorRequest> OnSubmit { get; set; }
+
+    private string _name = string.Empty;
+    private string _departmentValue = string.Empty;
+    private string _careerLevelValue = string.Empty;
+    private string _jobTitle = string.Empty;
+    private string _admissionDate = string.Empty;
+    private string _dismissalDate = string.Empty;
+    private string _pixKey = string.Empty;
+    private string _baseSalary = string.Empty;
+    private string _email = string.Empty;
+    private string _photoUrl = string.Empty;
+    private string _profileOverrideValue = string.Empty;
+    private bool _isActive = true;
+    private string? _localError;
+
+    private string DialogTitle => EditTarget is null ? "Novo colaborador" : "Editar colaborador";
+    private string? DisplayError => _localError ?? ErrorMessage;
+
+    private IEnumerable<CareerLevelDto> FilteredCareerLevels
+    {
+        get
+        {
+            if (!Guid.TryParse(_departmentValue, out var departmentId))
+            {
+                return CareerLevels;
+            }
+
+            return CareerLevels.Where(level =>
+                level.DepartmentId is null || level.DepartmentId == departmentId);
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (!IsOpen)
+        {
+            return;
+        }
+
+        _localError = null;
+
+        if (EditTarget is null)
+        {
+            ResetForCreate();
+            return;
+        }
+
+        _name = EditTarget.Name;
+        _departmentValue = EditTarget.DepartmentId.ToString();
+        _careerLevelValue = EditTarget.CareerLevelId?.ToString() ?? string.Empty;
+        _jobTitle = EditTarget.JobTitle ?? string.Empty;
+        _admissionDate = DateInputParser.FormatDateInput(EditTarget.AdmissionDate);
+        _dismissalDate = DateInputParser.FormatDateInput(EditTarget.DismissalDate);
+        _pixKey = EditTarget.PixKey ?? string.Empty;
+        _baseSalary = EditTarget.BaseSalary is null
+            ? string.Empty
+            : DecimalInputParser.FormatMoneyInput(EditTarget.BaseSalary.Value);
+        _email = EditTarget.Email ?? string.Empty;
+        _photoUrl = EditTarget.PhotoUrl ?? string.Empty;
+        _profileOverrideValue = EditTarget.CalculationProfileOverride?.ToString() ?? string.Empty;
+        _isActive = EditTarget.IsActive;
+    }
+
+    private void ResetForCreate()
+    {
+        _name = string.Empty;
+        _departmentValue = Departments.Count == 1 ? Departments[0].Id.ToString() : string.Empty;
+        _careerLevelValue = string.Empty;
+        _jobTitle = string.Empty;
+        _admissionDate = string.Empty;
+        _dismissalDate = string.Empty;
+        _pixKey = string.Empty;
+        _baseSalary = string.Empty;
+        _email = string.Empty;
+        _photoUrl = string.Empty;
+        _profileOverrideValue = string.Empty;
+        _isActive = true;
+    }
+
+    private Task OnDepartmentChangedAsync(string? value)
+    {
+        _departmentValue = value ?? string.Empty;
+
+        if (!Guid.TryParse(_careerLevelValue, out var careerLevelId))
+        {
+            return Task.CompletedTask;
+        }
+
+        var selectedLevel = CareerLevels.FirstOrDefault(level => level.Id == careerLevelId);
+        if (selectedLevel is null)
+        {
+            _careerLevelValue = string.Empty;
+            return Task.CompletedTask;
+        }
+
+        if (Guid.TryParse(_departmentValue, out var departmentId)
+            && selectedLevel.DepartmentId is not null
+            && selectedLevel.DepartmentId != departmentId)
+        {
+            _careerLevelValue = string.Empty;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task OnActiveChangedAsync(bool value)
+    {
+        _isActive = value;
+        if (_isActive)
+        {
+            _dismissalDate = string.Empty;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task CancelAsync()
+    {
+        IsOpen = false;
+        await IsOpenChanged.InvokeAsync(false);
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_name))
+        {
+            _localError = "O nome é obrigatório.";
+            return;
+        }
+
+        if (!Guid.TryParse(_departmentValue, out var departmentId))
+        {
+            _localError = "O setor é obrigatório.";
+            return;
+        }
+
+        Guid? careerLevelId = Guid.TryParse(_careerLevelValue, out var parsedLevelId)
+            ? parsedLevelId
+            : null;
+
+        DateOnly? admissionDate = DateInputParser.TryParseDateOnly(_admissionDate, out var parsedAdmission)
+            ? parsedAdmission
+            : null;
+
+        DateOnly? dismissalDate = null;
+        if (!_isActive)
+        {
+            if (!DateInputParser.TryParseDateOnly(_dismissalDate, out var parsedDismissal))
+            {
+                _localError = "Informe a data de demissão para inativar o colaborador.";
+                return;
+            }
+
+            dismissalDate = parsedDismissal;
+        }
+
+        decimal? baseSalary = null;
+        if (!string.IsNullOrWhiteSpace(_baseSalary))
+        {
+            if (!DecimalInputParser.TryParse(_baseSalary, out var parsedSalary))
+            {
+                _localError = "Informe um salário válido.";
+                return;
+            }
+
+            baseSalary = parsedSalary;
+        }
+
+        CalculationProfile? profileOverride = null;
+        if (!string.IsNullOrWhiteSpace(_profileOverrideValue)
+            && Enum.TryParse<CalculationProfile>(_profileOverrideValue, out var parsedProfile))
+        {
+            profileOverride = parsedProfile;
+        }
+
+        var request = new CollaboratorRequest(
+            _name.Trim(),
+            departmentId,
+            careerLevelId,
+            string.IsNullOrWhiteSpace(_jobTitle) ? null : _jobTitle.Trim(),
+            admissionDate,
+            dismissalDate,
+            string.IsNullOrWhiteSpace(_pixKey) ? null : _pixKey.Trim(),
+            baseSalary,
+            string.IsNullOrWhiteSpace(_email) ? null : _email.Trim(),
+            string.IsNullOrWhiteSpace(_photoUrl) ? null : _photoUrl.Trim(),
+            _isActive,
+            profileOverride);
+
+        await OnSubmit.InvokeAsync(request);
+    }
+}

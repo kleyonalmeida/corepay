@@ -1,0 +1,138 @@
+<Dialog IsOpen="@IsOpen" IsOpenChanged="@IsOpenChanged" Title="@DialogTitle">
+    <div class="settings-form">
+        @if (!string.IsNullOrWhiteSpace(DisplayError))
+        {
+            <p class="settings-form__error" role="alert">@DisplayError</p>
+        }
+
+        <Input Label="Nome"
+               Placeholder="Nome do projeto"
+               Value="@_name"
+               ValueChanged="@(value => _name = value ?? string.Empty)" />
+
+        <Input Label="Cliente"
+               Placeholder="Cliente opcional"
+               Value="@_client"
+               ValueChanged="@(value => _client = value ?? string.Empty)" />
+
+        <Select Label="Plataforma"
+                Value="@_platformValue"
+                ValueChanged="@OnPlatformChangedAsync">
+            @foreach (var platform in ProjectPlatformLabels.AllPlatforms)
+            {
+                <option value="@platform.ToString()">@ProjectPlatformLabels.GetLabel(platform)</option>
+            }
+        </Select>
+
+        <div class="settings-form__toggles">
+            <GoalToggle Label="Ativo" Value="@_isActive" ValueChanged="@(value => _isActive = value)" />
+            <GoalToggle Label="Alvo padrão de rateio"
+                        Value="@_isDefaultAllocationTarget"
+                        ValueChanged="@(value => _isDefaultAllocationTarget = value)" />
+            <GoalToggle Label="Exclui bônus de meta"
+                        Value="@_excludesGoalBonus"
+                        ValueChanged="@(value => _excludesGoalBonus = value)" />
+            <GoalToggle Label="Supervisor sem rateio do fixo"
+                        Value="@_excludesSupervisorFixedAllocation"
+                        ValueChanged="@(value => _excludesSupervisorFixedAllocation = value)" />
+        </div>
+
+        <FormDialogActions IsSaving="@IsSaving"
+                           SubmitLabel="@(IsSaving ? "Salvando..." : "Salvar")"
+                           OnSubmit="@SubmitAsync"
+                           OnCancel="@CancelAsync" />
+    </div>
+</Dialog>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+    [Parameter] public ProjectDto? EditTarget { get; set; }
+    [Parameter] public bool IsSaving { get; set; }
+    [Parameter] public string? ErrorMessage { get; set; }
+    [Parameter] public EventCallback<ProjectRequest> OnSubmit { get; set; }
+
+    private string _name = string.Empty;
+    private string _client = string.Empty;
+    private string _platformValue = ProjectPlatform.Lastlink.ToString();
+    private bool _isActive = true;
+    private bool _isDefaultAllocationTarget;
+    private bool _excludesGoalBonus;
+    private bool _excludesSupervisorFixedAllocation;
+    private string? _localError;
+
+    private string DialogTitle => EditTarget is null ? "Novo projeto" : "Editar projeto";
+    private string? DisplayError => _localError ?? ErrorMessage;
+
+    protected override void OnParametersSet()
+    {
+        if (!IsOpen)
+        {
+            return;
+        }
+
+        _localError = null;
+
+        if (EditTarget is null)
+        {
+            ResetForCreate();
+            return;
+        }
+
+        _name = EditTarget.Name;
+        _client = EditTarget.Client ?? string.Empty;
+        _platformValue = EditTarget.Platform.ToString();
+        _isActive = EditTarget.IsActive;
+        _isDefaultAllocationTarget = EditTarget.IsDefaultAllocationTarget;
+        _excludesGoalBonus = EditTarget.ExcludesGoalBonus;
+        _excludesSupervisorFixedAllocation = EditTarget.ExcludesSupervisorFixedAllocation;
+    }
+
+    private void ResetForCreate()
+    {
+        _name = string.Empty;
+        _client = string.Empty;
+        _platformValue = ProjectPlatform.Lastlink.ToString();
+        _isActive = true;
+        _isDefaultAllocationTarget = false;
+        _excludesGoalBonus = false;
+        _excludesSupervisorFixedAllocation = false;
+    }
+
+    private Task OnPlatformChangedAsync(string? value)
+    {
+        _platformValue = value ?? ProjectPlatform.Lastlink.ToString();
+        return Task.CompletedTask;
+    }
+
+    private async Task CancelAsync()
+    {
+        IsOpen = false;
+        await IsOpenChanged.InvokeAsync(false);
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (!Enum.TryParse<ProjectPlatform>(_platformValue, out var platform))
+        {
+            platform = ProjectPlatform.Lastlink;
+        }
+
+        if (string.IsNullOrWhiteSpace(_name))
+        {
+            _localError = "O nome é obrigatório.";
+            return;
+        }
+
+        var request = new ProjectRequest(
+            _name.Trim(),
+            string.IsNullOrWhiteSpace(_client) ? null : _client.Trim(),
+            platform,
+            _isActive,
+            _isDefaultAllocationTarget,
+            _excludesGoalBonus,
+            _excludesSupervisorFixedAllocation);
+
+        await OnSubmit.InvokeAsync(request);
+    }
+}

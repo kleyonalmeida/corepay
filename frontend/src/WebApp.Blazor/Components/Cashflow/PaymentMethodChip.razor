@@ -1,0 +1,10 @@
+@using WebApp.Blazor.Formatting
+
+@if (!string.IsNullOrWhiteSpace(Name))
+{
+    <span class="payment-method-chip @PaymentMethodChipTone.ResolveCssClass(Name)">@Name</span>
+}
+
+@code {
+    [Parameter] public string? Name { get; set; }
+}

@@ -1,0 +1,239 @@
+<Dialog IsOpen="@IsOpen" IsOpenChanged="@IsOpenChanged" Title="@DialogTitle" IsWide="true">
+    <div class="settings-form">
+        @if (!string.IsNullOrWhiteSpace(DisplayError))
+        {
+            <p class="settings-form__error" role="alert">@DisplayError</p>
+        }
+
+        @if (EditTarget is null)
+        {
+            <Select Label="Projeto"
+                    Value="@_projectFilter"
+                    ValueChanged="@OnProjectChangedAsync"
+                    Disabled="@IsSaving">
+                <option value="">Selecione um projeto</option>
+                @foreach (var project in Projects.Where(p => p.IsActive).OrderBy(p => p.Name))
+                {
+                    <option value="@project.Id">@project.Name</option>
+                }
+            </Select>
+
+            <div class="settings-form__row">
+                <Select Label="Mês"
+                        Value="@_monthValue"
+                        ValueChanged="@OnMonthChangedAsync"
+                        Disabled="@IsSaving">
+                    @for (var month = 1; month <= 12; month++)
+                    {
+                        <option value="@month">@CompetenceFormatter.Format(month, 2000).Split('/')[0]</option>
+                    }
+                </Select>
+                <Select Label="Ano"
+                        Value="@_yearValue"
+                        ValueChanged="@OnYearChangedAsync"
+                        Disabled="@IsSaving">
+                    @foreach (var year in YearOptions)
+                    {
+                        <option value="@year">@year</option>
+                    }
+                </Select>
+            </div>
+        }
+        else
+        {
+            <div class="project-revenues-form__meta">
+                <span class="text-label">Projeto</span>
+                <span>@EditTarget.ProjectName</span>
+            </div>
+            <div class="project-revenues-form__meta">
+                <span class="text-label">Competência</span>
+                <span>@CompetenceFormatter.Format(EditTarget.Month, EditTarget.Year)</span>
+            </div>
+        }
+
+        <div class="settings-form__row settings-form__row--3">
+            <Input Label="iGaming"
+                   IsMoney="true"
+                   Value="@_valueIgaming"
+                   ValueChanged="@(value => OnValueIgamingChanged(value))"
+                   Disabled="@IsSaving" />
+
+            <Input Label="Vendas"
+                   IsMoney="true"
+                   Value="@_valueVendas"
+                   ValueChanged="@(value => OnValueVendasChanged(value))"
+                   Disabled="@IsSaving" />
+
+            <Input Label="% grupo"
+                   Kind="NumericInputKind.Percent"
+                   Value="@_groupPercentage"
+                   ValueChanged="@(value => _groupPercentage = value ?? string.Empty)"
+                   Disabled="@IsSaving" />
+        </div>
+
+        <div class="project-revenues-form__total">
+            <span class="text-label">Total</span>
+            <span class="text-table-money tabular-nums">@MoneyFormatter.FormatMoney(CalculatedTotal)</span>
+        </div>
+
+        <div class="ui-field">
+            <label class="text-label ui-field__label" for="@NotesId">Observações</label>
+            <textarea id="@NotesId"
+                      class="ui-input project-revenues-form__notes"
+                      rows="3"
+                      placeholder="Observações opcionais"
+                      disabled="@IsSaving"
+                      @bind="_notes"></textarea>
+        </div>
+
+        <FormDialogActions IsSaving="@IsSaving"
+                           SubmitLabel="@(IsSaving ? "Salvando..." : SubmitLabel)"
+                           OnSubmit="@SubmitAsync"
+                           OnCancel="@CancelAsync" />
+    </div>
+</Dialog>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+    [Parameter] public ProjectRevenueDto? EditTarget { get; set; }
+    [Parameter] public IReadOnlyList<ProjectDto> Projects { get; set; } = [];
+    [Parameter] public int[] YearOptions { get; set; } = [];
+    [Parameter] public int DefaultMonth { get; set; } = 1;
+    [Parameter] public int DefaultYear { get; set; } = DateTime.UtcNow.Year;
+    [Parameter] public bool IsSaving { get; set; }
+    [Parameter] public string? ErrorMessage { get; set; }
+    [Parameter] public EventCallback<ProjectRevenueRequest> OnSubmit { get; set; }
+
+    private string _projectFilter = string.Empty;
+    private string _monthValue = "1";
+    private string _yearValue = string.Empty;
+    private string _valueIgaming = string.Empty;
+    private string _valueVendas = string.Empty;
+    private string _groupPercentage = "0";
+    private string _notes = string.Empty;
+    private string? _localError;
+
+    private string DialogTitle => EditTarget is null ? "Novo faturamento" : "Editar faturamento";
+    private string SubmitLabel => EditTarget is null ? "Registrar" : "Salvar";
+    private string? DisplayError => _localError ?? ErrorMessage;
+    private string NotesId { get; } = $"notes-{Guid.NewGuid():N}";
+    private decimal CalculatedTotal => ParseMoney(_valueIgaming) + ParseMoney(_valueVendas);
+
+    protected override void OnParametersSet()
+    {
+        if (!IsOpen)
+        {
+            return;
+        }
+
+        _localError = null;
+
+        if (EditTarget is null)
+        {
+            ResetForCreate();
+            return;
+        }
+
+        _projectFilter = EditTarget.ProjectId.ToString();
+        _monthValue = EditTarget.Month.ToString();
+        _yearValue = EditTarget.Year.ToString();
+        _valueIgaming = DecimalInputParser.FormatMoneyInput(EditTarget.ValueIgaming);
+        _valueVendas = DecimalInputParser.FormatMoneyInput(EditTarget.ValueVendas);
+        _groupPercentage = DecimalInputParser.FormatDecimal(EditTarget.GroupPercentage);
+        _notes = EditTarget.Notes ?? string.Empty;
+    }
+
+    private void ResetForCreate()
+    {
+        _projectFilter = string.Empty;
+        _monthValue = DefaultMonth.ToString();
+        _yearValue = DefaultYear.ToString();
+        _valueIgaming = string.Empty;
+        _valueVendas = string.Empty;
+        _groupPercentage = "0";
+        _notes = string.Empty;
+    }
+
+    private Task OnProjectChangedAsync(string? value)
+    {
+        _projectFilter = value ?? string.Empty;
+        return Task.CompletedTask;
+    }
+
+    private Task OnMonthChangedAsync(string? value)
+    {
+        _monthValue = value ?? DefaultMonth.ToString();
+        return Task.CompletedTask;
+    }
+
+    private Task OnYearChangedAsync(string? value)
+    {
+        _yearValue = value ?? DefaultYear.ToString();
+        return Task.CompletedTask;
+    }
+
+    private void OnValueIgamingChanged(string? value) => _valueIgaming = value ?? string.Empty;
+
+    private void OnValueVendasChanged(string? value) => _valueVendas = value ?? string.Empty;
+
+    private async Task CancelAsync()
+    {
+        IsOpen = false;
+        await IsOpenChanged.InvokeAsync(false);
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (!Guid.TryParse(_projectFilter, out var projectId))
+        {
+            _localError = "Selecione um projeto.";
+            return;
+        }
+
+        if (!int.TryParse(_monthValue, out var month) || month is < 1 or > 12)
+        {
+            _localError = "Selecione um mês válido.";
+            return;
+        }
+
+        if (!int.TryParse(_yearValue, out var year))
+        {
+            _localError = "Selecione um ano válido.";
+            return;
+        }
+
+        if (!DecimalInputParser.TryParse(_groupPercentage, out var groupPercentage))
+        {
+            _localError = "Informe um percentual válido.";
+            return;
+        }
+        if (groupPercentage is < 0 or > 100)
+        {
+            _localError = "O percentual do grupo deve estar entre 0 e 100.";
+            return;
+        }
+
+        var valueIgaming = ParseMoney(_valueIgaming);
+        var valueVendas = ParseMoney(_valueVendas);
+        if (valueIgaming + valueVendas <= 0)
+        {
+            _localError = "Informe ao menos um valor de iGaming ou Vendas maior que zero.";
+            return;
+        }
+
+        var request = new ProjectRevenueRequest(
+            projectId,
+            month,
+            year,
+            valueIgaming,
+            valueVendas,
+            groupPercentage,
+            string.IsNullOrWhiteSpace(_notes) ? null : _notes.Trim());
+
+        await OnSubmit.InvokeAsync(request);
+    }
+
+    private static decimal ParseMoney(string? value) =>
+        DecimalInputParser.TryParse(value, out var parsed) ? parsed : 0m;
+}

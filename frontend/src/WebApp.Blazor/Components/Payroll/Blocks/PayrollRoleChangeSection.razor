@@ -1,0 +1,96 @@
+<div class="payroll-nested-block payroll-role-change-block">
+    <div class="payroll-nested-block__header">
+        <h3 class="payroll-nested-block__title">Mudanças de cargo</h3>
+        <Button Variant="ButtonVariant.Outline" Size="ButtonSize.Sm" OnClick="@AddRoleChangeAsync">
+            <Icon Kind="IconKind.Plus" Size="IconSize.Default" />
+            Mudança
+        </Button>
+    </div>
+
+    @for (var i = 0; i < State.RoleChanges.Count; i++)
+    {
+        var index = i;
+        var change = State.RoleChanges[index];
+        <div class="payroll-nested-block payroll-nested-block--inner payroll-role-change-block">
+            <div class="payroll-nested-block__header">
+                <Input Label="Data" Type="date" Value="@change.ChangeDate.ToString("yyyy-MM-dd")"
+                       ValueChanged="@(v => UpdateDateAsync(index, v))" />
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Sm" OnClick="@(() => RemoveRoleChangeAsync(index))">
+                    <Icon Kind="IconKind.Trash2" Size="IconSize.Default" />
+                </Button>
+            </div>
+            <div class="payroll-nested-block__grid">
+                <Select Label="Novo setor" Value="@(change.Role.DepartmentId?.ToString() ?? string.Empty)" ValueChanged="@(v => UpdateDepartmentAsync(index, v))">
+                    <option value="">Selecione</option>
+                    @foreach (var dept in Options.Departments)
+                    {
+                        <option value="@dept.Id">@dept.Name</option>
+                    }
+                </Select>
+                <Select Label="Novo nível" Value="@(change.Role.CareerLevelId?.ToString() ?? string.Empty)" ValueChanged="@(v => UpdateCareerLevelAsync(index, v))">
+                    <option value="">Selecione</option>
+                    @foreach (var level in Options.CareerLevels)
+                    {
+                        <option value="@level.Id">@level.Name</option>
+                    }
+                </Select>
+                <Input Label="Salário" IsMoney="true" Value="@(change.Role.FullBaseSalary is null ? string.Empty : PayrollInputHelpers.FormatMoney(change.Role.FullBaseSalary.Value))"
+                       ValueChanged="@(v => UpdateSalaryAsync(index, v))" />
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PayrollEntryEditState State { get; set; } = default!;
+    [Parameter, EditorRequired] public PayrollEditorOptionsDto Options { get; set; } = default!;
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private async Task AddRoleChangeAsync()
+    {
+        State.RoleChanges.Add(new PayrollRoleChangeEntryDto(
+            DateOnly.FromDateTime(DateTime.Today),
+            new PayrollRoleChangeSnapshotDto(null, null, null, GoalTier.None, null, null, null, null, 0m, null, null, 0, 0, null, null, null, null)));
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task RemoveRoleChangeAsync(int index)
+    {
+        State.RoleChanges.RemoveAt(index);
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateDateAsync(int index, string? value)
+    {
+        if (!DateOnly.TryParse(value, out var date)) return;
+        var current = State.RoleChanges[index];
+        State.RoleChanges[index] = current with { ChangeDate = date };
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateDepartmentAsync(int index, string? value)
+    {
+        var current = State.RoleChanges[index];
+        var role = current.Role with { DepartmentId = Guid.TryParse(value, out var id) ? id : null };
+        State.RoleChanges[index] = current with { Role = role };
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateCareerLevelAsync(int index, string? value)
+    {
+        var current = State.RoleChanges[index];
+        var role = current.Role with { CareerLevelId = Guid.TryParse(value, out var id) ? id : null };
+        State.RoleChanges[index] = current with { Role = role };
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateSalaryAsync(int index, string? value)
+    {
+        var current = State.RoleChanges[index];
+        var salary = string.IsNullOrWhiteSpace(value) ? (decimal?)null : PayrollInputHelpers.ParseMoney(value);
+        var role = current.Role with { FullBaseSalary = salary };
+        State.RoleChanges[index] = current with { Role = role };
+        await OnChanged.InvokeAsync();
+    }
+
+}

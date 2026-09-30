@@ -1,0 +1,45 @@
+@inject ThemeService ThemeService
+@implements IDisposable
+
+<button type="button"
+        class="theme-toggle"
+        aria-label="@AriaLabel"
+        @onclick="ToggleThemeAsync">
+    @if (ThemeService.IsDark)
+    {
+        <Icon Kind="IconKind.Sun" Size="IconSize.Topbar" />
+        <span>Claro</span>
+    }
+    else
+    {
+        <Icon Kind="IconKind.Moon" Size="IconSize.Topbar" />
+        <span>Escuro</span>
+    }
+</button>
+
+@code {
+    private string AriaLabel => ThemeService.IsDark
+        ? "Alternar para tema claro"
+        : "Alternar para tema escuro";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ThemeService.InitializeAsync();
+        ThemeService.OnThemeChanged += HandleThemeChanged;
+    }
+
+    private async Task ToggleThemeAsync()
+    {
+        await ThemeService.ToggleAsync();
+    }
+
+    private void HandleThemeChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        ThemeService.OnThemeChanged -= HandleThemeChanged;
+    }
+}

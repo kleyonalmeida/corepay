@@ -1,0 +1,66 @@
+@using WebApp.Blazor.Formatting
+
+<div class="payroll-detail-breakdown">
+    @if (Result is not null)
+    {
+        <div class="payroll-entry-totals__grid">
+            <div>
+                <span class="payroll-entry-shell__label">Total</span>
+                <span class="payroll-entry-totals__total tabular-nums">@MoneyFormatter.FormatMoney(Result.TotalAmount)</span>
+            </div>
+            <div>
+                <span class="payroll-entry-shell__label">Fixo / complemento</span>
+                <span class="tabular-nums">@MoneyFormatter.FormatMoney(Result.BaseSalary)</span>
+            </div>
+            <div>
+                <span class="payroll-entry-shell__label">Comissão</span>
+                <span class="tabular-nums">@MoneyFormatter.FormatMoney(Result.CommissionAmount)</span>
+            </div>
+            @if (Result.PlatformTotal > 0)
+            {
+                <div>
+                    <span class="payroll-entry-shell__label">Plataforma</span>
+                    <span class="tabular-nums">@MoneyFormatter.FormatMoney(Result.PlatformTotal)</span>
+                </div>
+                <div>
+                    <span class="payroll-entry-shell__label">PIX empresa</span>
+                    <span class="tabular-nums">@MoneyFormatter.FormatMoney(Result.TotalAmount - Result.PlatformTotal)</span>
+                </div>
+            }
+        </div>
+    }
+
+    @if (ProjectTotals is { Count: > 0 })
+    {
+        <div class="payroll-detail-breakdown__projects">
+            <h4 class="payroll-detail-breakdown__projects-title">Custo por projeto</h4>
+            <table class="payroll-detail-breakdown__table">
+                <thead>
+                    <tr>
+                        <th>Projeto</th>
+                        <th class="payroll-detail-breakdown__amount-col">Valor</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var total in ProjectTotals)
+                    {
+                        <tr>
+                            <td>@ResolveProjectName(total.ProjectId)</td>
+                            <td class="tabular-nums payroll-detail-breakdown__amount-col">@MoneyFormatter.FormatMoney(total.Amount)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public PayrollEntryResultDto? Result { get; set; }
+    [Parameter] public IReadOnlyList<PayrollProjectTotalDto>? ProjectTotals { get; set; }
+    [Parameter] public IReadOnlyDictionary<Guid, string> ProjectNames { get; set; } =
+        new Dictionary<Guid, string>();
+
+    private string ResolveProjectName(Guid projectId) =>
+        ProjectNames.TryGetValue(projectId, out var name) ? name : projectId.ToString();
+}

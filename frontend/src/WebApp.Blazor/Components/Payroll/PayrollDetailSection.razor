@@ -1,0 +1,367 @@
+@using WebApp.Blazor.Formatting
+@using WebApp.Blazor.Auth
+@inject IAuthorizationService AuthorizationService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager Navigation
+@inject IPayrollApiService PayrollApi
+
+<div class="payroll-detail">
+    <div class="payroll-detail__header">
+        <div>
+            <h1 class="text-page-title">Detalhe da folha</h1>
+            <p class="text-page-subtitle">
+                @_model.DepartmentName — @CompetenceFormatter.Format(_model.Month, _model.Year)
+            </p>
+            @if (!string.IsNullOrWhiteSpace(_model.SubmittedBy))
+            {
+                <p class="payroll-detail__meta">Submetido por: @_model.SubmittedBy</p>
+            }
+            @if (!string.IsNullOrWhiteSpace(_model.ApprovedBy))
+            {
+                <p class="payroll-detail__meta">Aprovado por: @_model.ApprovedBy</p>
+            }
+        </div>
+
+        <div class="payroll-detail__header-actions">
+            <StatusBadge Kind="@PayrollStatusMapper.ToStatusKind(_model.Status)" />
+            @if (_canEdit)
+            {
+                <Button Variant="ButtonVariant.Outline"
+                        Size="ButtonSize.Sm"
+                        Disabled="@_isBusy"
+                        OnClick="@NavigateToEdit">
+                    <Icon Kind="IconKind.Pencil" Size="IconSize.Default" />
+                    Editar
+                </Button>
+            }
+            <PayrollDetailWorkflowBar AllowedActions="@_model.AllowedActions"
+                                      HasApprovePolicy="@_hasApprovePolicy"
+                                      HasPayPolicy="@_hasPayPolicy"
+                                      HasWritePolicy="@_hasWritePolicy"
+                                      HasDeletePolicy="@_hasDeletePolicy"
+                                      IsBusy="@_isBusy"
+                                      OnApprove="@ApprovePayrollAsync"
+                                      OnReject="@OpenRejectDialogAsync"
+                                      OnPayPayroll="@PayPayrollAsync"
+                                      OnRecalculate="@RecalculatePayrollAsync"
+                                      OnDelete="@OpenDeleteDialogAsync" />
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_workflowMessage))
+    {
+        <p class="settings-form__hint" role="status">@_workflowMessage</p>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_workflowError))
+    {
+        <p class="settings-form__error" role="alert">@_workflowError</p>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_model.RejectionComment))
+    {
+        <div class="payroll-detail__rejection" role="alert">
+            <strong>Reprovação:</strong> @_model.RejectionComment
+        </div>
+    }
+
+    <Card Class="payroll-detail__summary">
+        <ChildContent>
+            <div class="payroll-detail__summary-grid">
+                <div>
+                    <span class="payroll-entry-shell__label">Total da folha</span>
+                    <span class="payroll-detail__summary-total tabular-nums">@MoneyFormatter.FormatMoney(_model.TotalAmount)</span>
+                </div>
+                <div>
+                    <span class="payroll-entry-shell__label">Colaboradores</span>
+                    <span class="tabular-nums">@_model.Entries.Count</span>
+                </div>
+            </div>
+        </ChildContent>
+    </Card>
+
+    <Card Class="payroll-detail__entries">
+        <HeaderContent>
+            <h2 class="font-semibold">Colaboradores</h2>
+        </HeaderContent>
+        <ChildContent>
+            @if (_model.Entries.Count == 0)
+            {
+                <EmptyState Title="Nenhum colaborador"
+                            Description="Esta folha não possui colaboradores visíveis." />
+            }
+            else
+            {
+                <div class="payroll-detail__entries-list">
+                    @foreach (var entry in _model.Entries)
+                    {
+                        <PayrollDetailEntryRow Entry="@entry"
+                                               ProjectNames="@_projectNames"
+                                               AllowedActions="@_model.AllowedActions"
+                                               HasApprovePolicy="@_hasApprovePolicy"
+                                               HasPayPolicy="@_hasPayPolicy"
+                                               IsBusy="@_isBusy"
+                                               OnApproveEntry="@ApproveEntryAsync"
+                                               OnPayEntry="@PayEntryAsync"
+                                               OnToggleNf="@ToggleNfAsync" />
+                    }
+                </div>
+            }
+        </ChildContent>
+    </Card>
+</div>
+
+<Dialog IsOpen="@_rejectDialogOpen" IsOpenChanged="@OnRejectDialogOpenChangedAsync" Title="Reprovar folha">
+    <div class="settings-form">
+        <Input Label="Comentário de reprovação"
+               Value="@_rejectionComment"
+               ValueChanged="@((string value) => _rejectionComment = value)"
+               Placeholder="Descreva o motivo da reprovação" />
+
+        @if (!string.IsNullOrWhiteSpace(_rejectDialogError))
+        {
+            <p class="settings-form__error" role="alert">@_rejectDialogError</p>
+        }
+
+        <div class="settings-form__actions">
+            <Button Variant="ButtonVariant.Outline"
+                    Disabled="@_isBusy"
+                    OnClick="@CloseRejectDialogAsync">
+                Cancelar
+            </Button>
+            <Button Variant="ButtonVariant.Destructive"
+                    Disabled="@_isBusy"
+                    OnClick="@ConfirmRejectAsync">
+                @(_isBusy ? "Reprovando..." : "Reprovar")
+            </Button>
+        </div>
+    </div>
+</Dialog>
+
+<Dialog IsOpen="@_deleteDialogOpen" IsOpenChanged="@OnDeleteDialogOpenChangedAsync" Title="Excluir folha">
+    <div class="settings-form">
+        <p class="settings-form__hint">
+            Tem certeza que deseja excluir a folha de
+            <strong>@CompetenceFormatter.Format(_model.Month, _model.Year)</strong>?
+            Esta ação não pode ser desfeita.
+        </p>
+
+        @if (!string.IsNullOrWhiteSpace(_deleteDialogError))
+        {
+            <p class="settings-form__error" role="alert">@_deleteDialogError</p>
+        }
+
+        <div class="settings-form__actions">
+            <Button Variant="ButtonVariant.Outline"
+                    Disabled="@_isBusy"
+                    OnClick="@CloseDeleteDialogAsync">
+                Cancelar
+            </Button>
+            <Button Variant="ButtonVariant.Destructive"
+                    Disabled="@_isBusy"
+                    OnClick="@ConfirmDeleteAsync">
+                @(_isBusy ? "Excluindo..." : "Excluir")
+            </Button>
+        </div>
+    </div>
+</Dialog>
+
+@code {
+    [Parameter, EditorRequired] public PayrollDetailDto Payroll { get; set; } = default!;
+
+    private PayrollDetailDto _model = default!;
+    private bool _canEdit;
+    private bool _hasApprovePolicy;
+    private bool _hasPayPolicy;
+    private bool _hasWritePolicy;
+    private bool _hasDeletePolicy;
+    private bool _isBusy;
+    private string? _workflowError;
+    private string? _workflowMessage;
+    private Dictionary<Guid, string> _projectNames = [];
+
+    private bool _rejectDialogOpen;
+    private string _rejectionComment = string.Empty;
+    private string? _rejectDialogError;
+
+    private bool _deleteDialogOpen;
+    private string? _deleteDialogError;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _model = Payroll;
+        _projectNames = _model.EditorOptions.Projects
+            .ToDictionary(p => p.Id, p => p.Name);
+
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        _hasApprovePolicy = (await AuthorizationService.AuthorizeAsync(user, AppPolicies.PayrollsApprove)).Succeeded;
+        _hasPayPolicy = (await AuthorizationService.AuthorizeAsync(user, AppPolicies.PayrollsPay)).Succeeded;
+        _hasWritePolicy = (await AuthorizationService.AuthorizeAsync(user, AppPolicies.PayrollsWrite)).Succeeded;
+        _hasDeletePolicy = (await AuthorizationService.AuthorizeAsync(user, AppPolicies.PayrollsDelete)).Succeeded;
+
+        _canEdit = _model.AllowedActions.Edit && _hasWritePolicy;
+    }
+
+    private void NavigateToEdit() => Navigation.NavigateTo($"/payrolls/{_model.Id}/edit");
+
+    private async Task ApprovePayrollAsync() =>
+        await RunMutationAsync(
+            () => PayrollApi.ApprovePayrollAsync(_model.Id),
+            "Folha aprovada com sucesso.");
+
+    private Task OpenRejectDialogAsync()
+    {
+        _rejectionComment = string.Empty;
+        _rejectDialogError = null;
+        _rejectDialogOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private async Task ConfirmRejectAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_rejectionComment))
+        {
+            _rejectDialogError = PayrollErrorMessages.Translate("payrolls.rejection_comment_required");
+            return;
+        }
+
+        _isBusy = true;
+        _rejectDialogError = null;
+
+        var result = await PayrollApi.RejectPayrollAsync(
+            _model.Id,
+            new RejectPayrollRequestDto(_rejectionComment.Trim()));
+
+        if (result.Status == PayrollApiStatus.Success && result.Payroll is not null)
+        {
+            _rejectDialogOpen = false;
+            ApplyUpdatedPayroll(result.Payroll, "Folha reprovada.");
+        }
+        else
+        {
+            _rejectDialogError = PayrollErrorMessages.ForMutation(result);
+        }
+
+        _isBusy = false;
+    }
+
+    private async Task PayPayrollAsync() =>
+        await RunMutationAsync(
+            () => PayrollApi.PayPayrollAsync(_model.Id),
+            "Folha marcada como paga.");
+
+    private async Task RecalculatePayrollAsync() =>
+        await RunMutationAsync(
+            () => PayrollApi.RecalculatePayrollAsync(_model.Id),
+            "Folha recalculada.");
+
+    private Task OpenDeleteDialogAsync()
+    {
+        _deleteDialogError = null;
+        _deleteDialogOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        _isBusy = true;
+        _deleteDialogError = null;
+
+        var result = await PayrollApi.DeletePayrollAsync(_model.Id);
+        if (result.Status == PayrollApiStatus.Success)
+        {
+            Navigation.NavigateTo("/payrolls");
+            return;
+        }
+
+        _deleteDialogError = PayrollErrorMessages.ForDelete(result);
+        _isBusy = false;
+    }
+
+    private async Task ApproveEntryAsync(Guid entryId) =>
+        await RunMutationAsync(
+            () => PayrollApi.ApproveEntryAsync(_model.Id, entryId),
+            "Colaborador aprovado.");
+
+    private async Task PayEntryAsync(Guid entryId)
+    {
+        var entry = _model.Entries.First(e => e.Id == entryId);
+        await RunMutationAsync(
+            () => PayrollApi.PayEntryAsync(_model.Id, entryId, new SetEntryPaidRequestDto(!entry.IsPaid)),
+            entry.IsPaid ? "Pagamento desmarcado." : "Colaborador marcado como pago.");
+    }
+
+    private async Task ToggleNfAsync(Guid entryId)
+    {
+        var entry = _model.Entries.First(e => e.Id == entryId);
+        await RunMutationAsync(
+            () => PayrollApi.SetEntryNfAsync(_model.Id, entryId, new SetEntryNfRequestDto(!entry.NfSent)),
+            entry.NfSent ? "NF desmarcada." : "NF marcada como enviada.");
+    }
+
+    private async Task RunMutationAsync(
+        Func<Task<PayrollMutationResult>> action,
+        string successMessage)
+    {
+        _isBusy = true;
+        _workflowError = null;
+        _workflowMessage = null;
+
+        var result = await action();
+        if (result.Status == PayrollApiStatus.Success && result.Payroll is not null)
+        {
+            ApplyUpdatedPayroll(result.Payroll, successMessage);
+        }
+        else
+        {
+            _workflowError = PayrollErrorMessages.ForMutation(result);
+        }
+
+        _isBusy = false;
+    }
+
+    private void ApplyUpdatedPayroll(PayrollDetailDto payroll, string successMessage)
+    {
+        _model = payroll;
+        _canEdit = _model.AllowedActions.Edit && _hasWritePolicy;
+        _workflowMessage = successMessage;
+    }
+
+    private Task OnRejectDialogOpenChangedAsync(bool isOpen)
+    {
+        _rejectDialogOpen = isOpen;
+        if (!isOpen)
+        {
+            _rejectDialogError = null;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task CloseRejectDialogAsync()
+    {
+        _rejectDialogOpen = false;
+        _rejectDialogError = null;
+        return Task.CompletedTask;
+    }
+
+    private Task OnDeleteDialogOpenChangedAsync(bool isOpen)
+    {
+        _deleteDialogOpen = isOpen;
+        if (!isOpen)
+        {
+            _deleteDialogError = null;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task CloseDeleteDialogAsync()
+    {
+        _deleteDialogOpen = false;
+        _deleteDialogError = null;
+        return Task.CompletedTask;
+    }
+}

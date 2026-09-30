@@ -1,0 +1,100 @@
+@using WebApp.Blazor.Formatting
+
+<div class="payroll-detail-entry @(IsExpanded ? "payroll-detail-entry--expanded" : null) @(Entry.IsPaid ? "payroll-detail-entry--paid" : null)">
+    <button type="button"
+            class="payroll-detail-entry__header"
+            aria-expanded="@IsExpanded"
+            @onclick="ToggleExpanded">
+        <Icon Kind="IconKind.ChevronRight"
+              Size="IconSize.Default"
+              Class="payroll-detail-entry__chevron" />
+
+        <div class="collaborators-table__identity payroll-detail-entry__identity">
+            <Avatar Name="@Entry.CollaboratorName" Size="AvatarSize.Sm" />
+            <div>
+                <p class="collaborators-table__name">@Entry.CollaboratorName</p>
+                <p class="collaborators-table__job-title">@(Entry.CareerLevelName ?? "—")</p>
+            </div>
+        </div>
+
+        <div class="payroll-detail-entry__meta">
+            <div>
+                <span class="payroll-entry-shell__label">PIX</span>
+                <span class="text-pix-key">@(Entry.PixKey ?? "—")</span>
+            </div>
+            <div>
+                <span class="payroll-entry-shell__label">Total</span>
+                <span class="text-table-money tabular-nums">@FormatEntryTotal()</span>
+            </div>
+        </div>
+
+        <div class="payroll-detail-entry__chips">
+            @if (Entry.IsApproved)
+            {
+                <StatusBadge Kind="StatusKind.Approved" />
+            }
+            @if (Entry.IsPaid)
+            {
+                <StatusBadge Kind="StatusKind.Paid" />
+            }
+            @if (Entry.NfSent)
+            {
+                <StatusBadge Kind="StatusKind.NfSent" />
+            }
+            else if (Entry.IsPaid)
+            {
+                <StatusBadge Kind="StatusKind.NfPending" />
+            }
+        </div>
+    </button>
+
+    @if (IsExpanded)
+    {
+        <div class="payroll-detail-entry__body">
+            <PayrollDetailEntryActions ShowApproveEntry="@_showApproveEntry"
+                                       ShowPayEntry="@_showPayEntry"
+                                       ShowToggleNf="@_showToggleNf"
+                                       IsPaid="@Entry.IsPaid"
+                                       NfSent="@Entry.NfSent"
+                                       IsBusy="@IsBusy"
+                                       OnApproveEntry="@(() => OnApproveEntry.InvokeAsync(Entry.Id))"
+                                       OnPayEntry="@(() => OnPayEntry.InvokeAsync(Entry.Id))"
+                                       OnToggleNf="@(() => OnToggleNf.InvokeAsync(Entry.Id))" />
+            <PayrollEntryBreakdownPanel Result="@Entry.Result"
+                                        ProjectTotals="@Entry.ProjectTotals"
+                                        ProjectNames="@ProjectNames" />
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PayrollEntryEditorDto Entry { get; set; } = default!;
+    [Parameter] public IReadOnlyDictionary<Guid, string> ProjectNames { get; set; } =
+        new Dictionary<Guid, string>();
+    [Parameter, EditorRequired] public PayrollAllowedActionsDto AllowedActions { get; set; } = default!;
+    [Parameter] public bool HasApprovePolicy { get; set; }
+    [Parameter] public bool HasPayPolicy { get; set; }
+    [Parameter] public bool IsBusy { get; set; }
+    [Parameter] public EventCallback<Guid> OnApproveEntry { get; set; }
+    [Parameter] public EventCallback<Guid> OnPayEntry { get; set; }
+    [Parameter] public EventCallback<Guid> OnToggleNf { get; set; }
+
+    private bool IsExpanded { get; set; }
+    private bool _showApproveEntry;
+    private bool _showPayEntry;
+    private bool _showToggleNf;
+
+    protected override void OnParametersSet()
+    {
+        _showApproveEntry = AllowedActions.ApproveEntry && HasApprovePolicy && !Entry.IsApproved;
+        _showPayEntry = AllowedActions.PayEntry && HasPayPolicy;
+        _showToggleNf = AllowedActions.ToggleNf && HasPayPolicy;
+    }
+
+    private void ToggleExpanded() => IsExpanded = !IsExpanded;
+
+    private string FormatEntryTotal() =>
+        Entry.Result is not null
+            ? MoneyFormatter.FormatMoney(Entry.Result.TotalAmount)
+            : "—";
+}

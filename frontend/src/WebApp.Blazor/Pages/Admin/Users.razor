@@ -1,0 +1,9 @@
+@page "/admin/users"
+@attribute [Authorize(Policy = AppPolicies.UsersRead)]
+
+<PageTitle>Usuários — CorePay</PageTitle>
+
+<h1 class="text-page-title">Usuários</h1>
+<p class="text-page-subtitle">Gerencie contas, papéis e setores dos gerentes</p>
+
+<UsersSection />

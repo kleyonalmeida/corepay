@@ -1,0 +1,590 @@
+@using WebApp.Blazor.Auth
+@using WebApp.Blazor.Formatting
+@inject ICashflowApiService CashflowApiService
+@inject IAuthorizationService AuthorizationService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<div class="cashflow-page">
+    <Tabs Items="@_tabItems"
+          ActiveTab="_activeTab"
+          ActiveTabChanged="OnActiveTabChangedAsync"
+          AriaLabel="Fluxo de caixa">
+        @if (_activeTab == 0)
+        {
+            <div class="cashflow-tab-panel">
+            @if (!string.IsNullOrWhiteSpace(_actionMessage))
+            {
+                <div class="cashflow-action-message" role="status">@_actionMessage</div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(_actionError))
+            {
+                <div class="cashflow-action-error" role="alert">@_actionError</div>
+            }
+
+            <div class="cashflow-stats-grid">
+                <StatCard Label="Entradas"
+                          Value="@_summary.TotalEntradas"
+                          Tone="SemanticTone.Emerald" />
+                <StatCard Label="Saídas"
+                          Value="@_summary.TotalSaidas"
+                          Tone="SemanticTone.Red" />
+                <StatCard Label="Saldo"
+                          Value="@_summary.Saldo"
+                          Tone="@(_summary.Saldo >= 0 ? SemanticTone.Emerald : SemanticTone.Red)" />
+                <StatCard Label="Lançamentos"
+                          ValueText="@_summary.Count.ToString()"
+                          Tone="SemanticTone.Blue" />
+            </div>
+
+            <Card Class="cashflow-filters-card">
+        <ChildContent>
+            <div class="cashflow-filters">
+                <Select Label="Mês"
+                        Value="@_monthFilter"
+                        ValueChanged="@OnMonthFilterChangedAsync">
+                    @for (var month = 1; month <= 12; month++)
+                    {
+                        <option value="@month">@CompetenceFormatter.Format(month, 2000).Split('/')[0]</option>
+                    }
+                </Select>
+                <Select Label="Ano"
+                        Value="@_yearFilter"
+                        ValueChanged="@OnYearFilterChangedAsync">
+                    @foreach (var year in _yearOptions)
+                    {
+                        <option value="@year">@year</option>
+                    }
+                </Select>
+                <Select Label="Tipo"
+                        Value="@_typeFilter"
+                        ValueChanged="@OnTypeFilterChangedAsync">
+                    <option value="">Todos</option>
+                    <option value="@CashflowEntryType.Entrada">Entrada</option>
+                    <option value="@CashflowEntryType.Saida">Saída</option>
+                </Select>
+                <Select Label="Projeto"
+                        Value="@_projectFilter"
+                        ValueChanged="@OnProjectFilterChangedAsync">
+                    <option value="">Todos</option>
+                    @foreach (var project in _filterOptions.Projects)
+                    {
+                        <option value="@project.Id">@project.Name</option>
+                    }
+                </Select>
+                <Select Label="Setor"
+                        Value="@_departmentFilter"
+                        ValueChanged="@OnDepartmentFilterChangedAsync">
+                    <option value="">Todos</option>
+                    @foreach (var department in _filterOptions.Departments)
+                    {
+                        <option value="@department.Id">@department.Name</option>
+                    }
+                </Select>
+                <Input Label="Busca"
+                       DebounceMs="400"
+                       Value="@_searchFilter"
+                       ValueChanged="@OnSearchFilterChangedAsync"
+                       Placeholder="Solicitante, local ou observação" />
+            </div>
+        </ChildContent>
+    </Card>
+
+    <Card Class="cashflow-table-card">
+        <HeaderContent>
+            <SectionCardHeader Title="Lançamentos" Icon="IconKind.Wallet">
+                <Actions>
+                    @if (_canWrite)
+                    {
+                        <Button Size="ButtonSize.Sm" OnClick="@OpenCreateDialogAsync">
+                            Novo lançamento
+                        </Button>
+                    }
+                </Actions>
+            </SectionCardHeader>
+        </HeaderContent>
+        <ChildContent>
+            @if (_isLoading)
+            {
+                <div class="settings-section__loading">
+                    <Spinner Label="Carregando lançamentos..." />
+                </div>
+            }
+            else if (!string.IsNullOrWhiteSpace(_loadError))
+            {
+                <EmptyState Title="Erro ao carregar lançamentos" Description="@_loadError" />
+            }
+            else if (_entries.Count == 0)
+            {
+                <EmptyState Title="Nenhum lançamento encontrado"
+                            Description="@GetEmptyStateDescription()" />
+            }
+            else
+            {
+                <div class="settings-table-wrapper">
+                    <table class="settings-table cashflow-table">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Competência</th>
+                                <th>Tipo</th>
+                                <th>Categoria</th>
+                                <th>Projeto</th>
+                                <th>Setor</th>
+                                <th>Método</th>
+                                <th class="cashflow-table__money">Valor</th>
+                                <th>Parcela</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var entry in _entries)
+                            {
+                                <tr>
+                                    <td class="tabular-nums">@DateFormatter.FormatDate(entry.TransactionDate)</td>
+                                    <td class="tabular-nums">@CompetenceFormatter.Format(entry.Month, entry.Year)</td>
+                                    <td>@CashflowCategoryLabels.GetTypeLabel(entry.Type)</td>
+                                    <td>@CashflowCategoryLabels.GetLabel(entry.Category)</td>
+                                    <td>@(entry.ProjectName ?? "—")</td>
+                                    <td>@(entry.DepartmentName ?? "—")</td>
+                                    <td>
+                                        <PaymentMethodChip Name="@entry.PaymentMethodName" />
+                                    </td>
+                                    <td class="cashflow-table__money text-table-money tabular-nums @GetAmountClass(entry.Type)">
+                                        @MoneyFormatter.FormatMoney(entry.Amount)
+                                    </td>
+                                    <td class="tabular-nums">
+                                        @if (entry.InstallmentNumber is not null && entry.CompraId is not null)
+                                        {
+                                            <Button Variant="ButtonVariant.Ghost"
+                                                    Size="ButtonSize.Sm"
+                                                    OnClick="@(() => OpenInstallmentDialogAsync(entry.CompraId!.Value))">
+                                                @entry.InstallmentNumber/@entry.InstallmentTotal
+                                            </Button>
+                                        }
+                                        else
+                                        {
+                                            <span>—</span>
+                                        }
+                                    </td>
+                                    <td class="settings-table__actions">
+                                        @if (_canWrite)
+                                        {
+                                            <div class="settings-table__action-group">
+                                                <Button Variant="ButtonVariant.Ghost"
+                                                        Size="ButtonSize.Sm"
+                                                        OnClick="@(() => OpenEditDialogAsync(entry))">
+                                                    Editar
+                                                </Button>
+                                                <Button Variant="ButtonVariant.Ghost"
+                                                        Size="ButtonSize.Sm"
+                                                        OnClick="@(() => OpenDeleteDialogAsync(entry))">
+                                                    Excluir
+                                                </Button>
+                                            </div>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <PaginationBar Page="@_page"
+                               TotalCount="@_totalCount"
+                               Disabled="@_isLoading"
+                               PageChanged="@OnPageChangedAsync" />
+            }
+        </ChildContent>
+    </Card>
+            </div>
+        }
+        else
+        {
+            <CashflowReportSection />
+        }
+    </Tabs>
+</div>
+
+<CashflowEntryFormDialog IsOpen="@_dialogOpen"
+                         IsOpenChanged="@OnDialogOpenChangedAsync"
+                         EditTarget="@_editTarget"
+                         FilterOptions="@_filterOptions"
+                         YearOptions="@_yearOptions"
+                         DefaultMonth="@_defaultMonth"
+                         DefaultYear="@_defaultYear"
+                         IsSaving="@_isSaving"
+                         ErrorMessage="@_formError"
+                         OnCreate="@CreateAsync"
+                         OnUpdate="@UpdateAsync" />
+
+<CashflowInstallmentGroupDialog IsOpen="@_installmentDialogOpen"
+                                IsOpenChanged="@OnInstallmentDialogOpenChangedAsync"
+                                CompraId="@_selectedCompraId" />
+
+<Dialog IsOpen="@_deleteDialogOpen" IsOpenChanged="@OnDeleteDialogOpenChangedAsync" Title="Excluir lançamento">
+    <div class="settings-form">
+        @if (_deleteTarget is not null)
+        {
+            <p class="settings-form__hint">
+                Tem certeza que deseja excluir o lançamento de
+                <strong>@CashflowCategoryLabels.GetLabel(_deleteTarget.Category)</strong>
+                (<strong>@MoneyFormatter.FormatMoney(_deleteTarget.Amount)</strong>,
+                competência <strong>@CompetenceFormatter.Format(_deleteTarget.Month, _deleteTarget.Year)</strong>)?
+                Esta ação não pode ser desfeita.
+            </p>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(_deleteError))
+        {
+            <p class="settings-form__error" role="alert">@_deleteError</p>
+        }
+
+        <div class="settings-form__actions">
+            <Button Variant="ButtonVariant.Outline"
+                    Disabled="@_isDeleting"
+                    OnClick="@CloseDeleteDialogAsync">
+                Cancelar
+            </Button>
+            <Button Variant="ButtonVariant.Destructive"
+                    Disabled="@_isDeleting"
+                    OnClick="@ConfirmDeleteAsync">
+                @(_isDeleting ? "Excluindo..." : "Excluir")
+            </Button>
+        </div>
+    </div>
+</Dialog>
+
+@code {
+    private readonly string[] _tabItems = ["Lançamentos", "Relatório"];
+    private int _activeTab;
+
+    private readonly List<CashflowEntryDto> _entries = [];
+    private CashflowSummaryDto _summary = new(0, 0, 0, 0);
+    private CashflowFilterOptionsDto _filterOptions = new([], [], []);
+    private readonly int[] _yearOptions = BuildYearOptions();
+
+    private bool _isLoading = true;
+    private bool _isSaving;
+    private bool _canWrite;
+    private string? _loadError;
+    private string? _actionMessage;
+    private string? _actionError;
+    private string? _formError;
+    private bool _dialogOpen;
+    private bool _installmentDialogOpen;
+    private CashflowEntryDto? _editTarget;
+    private Guid? _selectedCompraId;
+
+    private bool _deleteDialogOpen;
+    private bool _isDeleting;
+    private string? _deleteError;
+    private CashflowEntryDto? _deleteTarget;
+
+    private string _monthFilter = string.Empty;
+    private string _yearFilter = string.Empty;
+    private string _typeFilter = string.Empty;
+    private string _projectFilter = string.Empty;
+    private string _departmentFilter = string.Empty;
+    private string _searchFilter = string.Empty;
+    private bool _hasFilterOptionsLoaded;
+    private int _defaultMonth;
+    private int _defaultYear;
+    private int _page = 1;
+    private int _totalCount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var (month, year) = PayrollCompetenceDefaults.CurrentCompetence();
+        _defaultMonth = month;
+        _defaultYear = year;
+        _monthFilter = month.ToString();
+        _yearFilter = year.ToString();
+
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var writeAuthorization = await AuthorizationService.AuthorizeAsync(
+            authState.User,
+            AppPolicies.CashflowWrite);
+        _canWrite = writeAuthorization.Succeeded;
+
+        await LoadEntriesAsync();
+    }
+
+    private static int[] BuildYearOptions()
+    {
+        var currentYear = PayrollCompetenceDefaults.CurrentCompetence().Year;
+        return Enumerable.Range(currentYear - 2, 5).Reverse().ToArray();
+    }
+
+    private async Task LoadEntriesAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+        _entries.Clear();
+        _actionMessage = null;
+        _actionError = null;
+
+        var result = await CashflowApiService.GetEntriesAsync(BuildListQuery());
+        if (result.Status == CashflowApiStatus.Success && result.Data is not null)
+        {
+            _entries.AddRange(result.Data.Items);
+            _totalCount = result.Data.TotalCount;
+            _page = result.Data.Page;
+            _summary = result.Data.Summary;
+            if (result.Data.FilterOptions.Projects.Count > 0
+                || result.Data.FilterOptions.Departments.Count > 0
+                || result.Data.FilterOptions.PaymentMethods.Count > 0)
+            {
+                _filterOptions = result.Data.FilterOptions;
+                _hasFilterOptionsLoaded = true;
+            }
+        }
+        else
+        {
+            _loadError = CashflowErrorMessages.ForList(result);
+        }
+
+        _isLoading = false;
+    }
+
+    private CashflowListQuery BuildListQuery()
+    {
+        CashflowEntryType? type = null;
+        if (Enum.TryParse<CashflowEntryType>(_typeFilter, out var parsedType))
+        {
+            type = parsedType;
+        }
+
+        return new CashflowListQuery(
+            ParseIntFilter(_monthFilter),
+            ParseIntFilter(_yearFilter),
+            type,
+            null,
+            ParseGuidFilter(_projectFilter),
+            ParseGuidFilter(_departmentFilter),
+            string.IsNullOrWhiteSpace(_searchFilter) ? null : _searchFilter.Trim(),
+            _page,
+            ListPagination.PageSize,
+            IncludeFilterOptions: !_hasFilterOptionsLoaded);
+    }
+
+    private static int? ParseIntFilter(string value) =>
+        int.TryParse(value, out var parsed) ? parsed : null;
+
+    private static Guid? ParseGuidFilter(string value) =>
+        Guid.TryParse(value, out var parsed) ? parsed : null;
+
+    private static string GetAmountClass(CashflowEntryType type) =>
+        type == CashflowEntryType.Entrada ? "cashflow-table__entrada" : "cashflow-table__saida";
+
+    private string GetEmptyStateDescription() =>
+        _canWrite
+            ? "Cadastre um lançamento ou ajuste os filtros."
+            : "Ajuste os filtros para encontrar registros.";
+
+    private async Task OnMonthFilterChangedAsync(string? value)
+    {
+        _monthFilter = value ?? string.Empty;
+        _page = 1;
+        await LoadEntriesAsync();
+    }
+
+    private async Task OnYearFilterChangedAsync(string? value)
+    {
+        _yearFilter = value ?? string.Empty;
+        _page = 1;
+        await LoadEntriesAsync();
+    }
+
+    private async Task OnTypeFilterChangedAsync(string? value)
+    {
+        _typeFilter = value ?? string.Empty;
+        _page = 1;
+        await LoadEntriesAsync();
+    }
+
+    private async Task OnProjectFilterChangedAsync(string? value)
+    {
+        _projectFilter = value ?? string.Empty;
+        _page = 1;
+        await LoadEntriesAsync();
+    }
+
+    private async Task OnDepartmentFilterChangedAsync(string? value)
+    {
+        _departmentFilter = value ?? string.Empty;
+        _page = 1;
+        await LoadEntriesAsync();
+    }
+
+    private async Task OnSearchFilterChangedAsync(string? value)
+    {
+        _searchFilter = value ?? string.Empty;
+        _page = 1;
+        await LoadEntriesAsync();
+    }
+
+    private async Task OnPageChangedAsync(int page)
+    {
+        _page = page;
+        await LoadEntriesAsync();
+    }
+
+    private Task OpenCreateDialogAsync()
+    {
+        _editTarget = null;
+        _formError = null;
+        _dialogOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private Task OpenEditDialogAsync(CashflowEntryDto entry)
+    {
+        _editTarget = entry;
+        _formError = null;
+        _dialogOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private Task OpenInstallmentDialogAsync(Guid compraId)
+    {
+        _selectedCompraId = compraId;
+        _installmentDialogOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private Task OnDialogOpenChangedAsync(bool isOpen)
+    {
+        _dialogOpen = isOpen;
+        if (!isOpen)
+        {
+            _editTarget = null;
+            _formError = null;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task OnInstallmentDialogOpenChangedAsync(bool isOpen)
+    {
+        _installmentDialogOpen = isOpen;
+        if (!isOpen)
+        {
+            _selectedCompraId = null;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task CreateAsync(CashflowCreateRequest request)
+    {
+        _isSaving = true;
+        _formError = null;
+
+        var result = await CashflowApiService.CreateEntryAsync(request);
+        if (result.Status == CashflowApiStatus.Success && result.Data is not null)
+        {
+            _dialogOpen = false;
+            _editTarget = null;
+            _monthFilter = result.Data.PrimaryEntry.Month.ToString();
+            _yearFilter = result.Data.PrimaryEntry.Year.ToString();
+            await LoadEntriesAsync();
+            _actionMessage = result.Data.CreatedEntries.Count > 1
+                ? $"{result.Data.CreatedEntries.Count} parcelas criadas com sucesso."
+                : "Lançamento criado com sucesso.";
+        }
+        else
+        {
+            _formError = CashflowErrorMessages.ForCreate(result);
+        }
+
+        _isSaving = false;
+    }
+
+    private async Task UpdateAsync(CashflowUpdateRequest request)
+    {
+        if (_editTarget is null)
+        {
+            return;
+        }
+
+        _isSaving = true;
+        _formError = null;
+
+        var result = await CashflowApiService.UpdateEntryAsync(_editTarget.Id, request);
+        if (result.Status == CashflowApiStatus.Success)
+        {
+            _dialogOpen = false;
+            _editTarget = null;
+            await LoadEntriesAsync();
+            _actionMessage = "Lançamento atualizado com sucesso.";
+        }
+        else
+        {
+            _formError = CashflowErrorMessages.ForMutation(result);
+        }
+
+        _isSaving = false;
+    }
+
+    private Task OnActiveTabChangedAsync(int tabIndex)
+    {
+        _activeTab = tabIndex;
+        return Task.CompletedTask;
+    }
+
+    private Task OpenDeleteDialogAsync(CashflowEntryDto entry)
+    {
+        _deleteTarget = entry;
+        _deleteError = null;
+        _deleteDialogOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private Task OnDeleteDialogOpenChangedAsync(bool isOpen)
+    {
+        _deleteDialogOpen = isOpen;
+        if (!isOpen)
+        {
+            _deleteTarget = null;
+            _deleteError = null;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task CloseDeleteDialogAsync()
+    {
+        _deleteDialogOpen = false;
+        _deleteTarget = null;
+        _deleteError = null;
+        return Task.CompletedTask;
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_deleteTarget is null)
+        {
+            return;
+        }
+
+        _isDeleting = true;
+        _deleteError = null;
+        _actionMessage = null;
+        _actionError = null;
+
+        var result = await CashflowApiService.DeleteEntryAsync(_deleteTarget.Id);
+        if (result.Status == CashflowApiStatus.Success)
+        {
+            _deleteDialogOpen = false;
+            _deleteTarget = null;
+            await LoadEntriesAsync();
+            _actionMessage = "Lançamento excluído com sucesso.";
+        }
+        else
+        {
+            _deleteError = CashflowErrorMessages.ForDelete(result);
+        }
+
+        _isDeleting = false;
+    }
+}

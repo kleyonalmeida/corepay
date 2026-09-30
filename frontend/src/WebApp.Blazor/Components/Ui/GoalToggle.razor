@@ -1,0 +1,26 @@
+<button type="button"
+        class="goal-toggle @(Value ? "goal-toggle--checked" : null)"
+        role="switch"
+        aria-checked="@Value.ToString().ToLowerInvariant()"
+        aria-label="@Label"
+        @onclick="ToggleAsync">
+    <span class="goal-toggle__track">
+        <span class="goal-toggle__thumb"></span>
+    </span>
+    @if (!string.IsNullOrWhiteSpace(Label))
+    {
+        <span class="goal-toggle__label text-label">@Label</span>
+    }
+</button>
+
+@code {
+    [Parameter] public bool Value { get; set; }
+    [Parameter] public EventCallback<bool> ValueChanged { get; set; }
+    [Parameter] public string Label { get; set; } = string.Empty;
+
+    private async Task ToggleAsync()
+    {
+        Value = !Value;
+        await ValueChanged.InvokeAsync(Value);
+    }
+}

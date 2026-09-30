@@ -1,0 +1,17 @@
+<div class="ui-card @Class">
+    @if (HeaderContent is not null)
+    {
+        <div class="ui-card__header">
+            @HeaderContent
+        </div>
+    }
+    <div class="ui-card__body">
+        @ChildContent
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public RenderFragment? HeaderContent { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

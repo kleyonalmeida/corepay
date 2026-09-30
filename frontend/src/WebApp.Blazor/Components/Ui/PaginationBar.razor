@@ -1,0 +1,51 @@
+@if (TotalCount > PageSize)
+{
+    <nav class="list-pagination" aria-label="Paginação da lista">
+        <span class="list-pagination__info">@GetRangeLabel()</span>
+        <div class="list-pagination__actions">
+            <Button Variant="ButtonVariant.Outline"
+                    Size="ButtonSize.Sm"
+                    Disabled="@(!CanGoPrevious || Disabled)"
+                    OnClick="@GoPreviousAsync">
+                Anterior
+            </Button>
+            <span class="list-pagination__pages">Página @Page de @TotalPages</span>
+            <Button Variant="ButtonVariant.Outline"
+                    Size="ButtonSize.Sm"
+                    Disabled="@(!CanGoNext || Disabled)"
+                    OnClick="@GoNextAsync">
+                Próxima
+            </Button>
+        </div>
+    </nav>
+}
+
+@code {
+    [Parameter] public int Page { get; set; } = 1;
+    [Parameter] public int PageSize { get; set; } = ListPagination.PageSize;
+    [Parameter] public int TotalCount { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public EventCallback<int> PageChanged { get; set; }
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(TotalCount / (double)PageSize));
+    private bool CanGoPrevious => Page > 1;
+    private bool CanGoNext => Page < TotalPages;
+
+    private string GetRangeLabel()
+    {
+        if (TotalCount == 0)
+        {
+            return "Nenhum registro";
+        }
+
+        var start = ((Page - 1) * PageSize) + 1;
+        var end = Math.Min(Page * PageSize, TotalCount);
+        return $"Exibindo {start}–{end} de {TotalCount}";
+    }
+
+    private Task GoPreviousAsync() =>
+        CanGoPrevious ? PageChanged.InvokeAsync(Page - 1) : Task.CompletedTask;
+
+    private Task GoNextAsync() =>
+        CanGoNext ? PageChanged.InvokeAsync(Page + 1) : Task.CompletedTask;
+}

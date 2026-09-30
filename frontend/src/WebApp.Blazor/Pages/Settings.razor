@@ -1,0 +1,33 @@
+@page "/settings"
+@attribute [Authorize(Policy = AppPolicies.MasterData)]
+
+<PageTitle>Configurações — CorePay</PageTitle>
+
+<h1 class="text-page-title">Configurações</h1>
+<p class="text-page-subtitle">Cadastros mestres do sistema</p>
+
+<div class="settings-page">
+    <AuthorizeView Policy="@AppPolicies.DepartmentsWrite">
+        <Authorized>
+            <DepartmentsSection />
+        </Authorized>
+    </AuthorizeView>
+
+    <AuthorizeView Policy="@AppPolicies.CareerLevelsWrite">
+        <Authorized>
+            <CareerLevelsSection />
+        </Authorized>
+    </AuthorizeView>
+
+    <AuthorizeView Policy="@AppPolicies.ProjectsWrite">
+        <Authorized>
+            <ProjectsSection />
+        </Authorized>
+    </AuthorizeView>
+
+    <AuthorizeView Policy="@AppPolicies.PaymentMethodsWrite">
+        <Authorized>
+            <PaymentMethodsSection />
+        </Authorized>
+    </AuthorizeView>
+</div>

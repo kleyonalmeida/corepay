@@ -1,0 +1,86 @@
+@using WebApp.Blazor.Auth
+
+<div class="payroll-detail__workflow-bar">
+    @if (_showApprove)
+    {
+        <Button Size="ButtonSize.Sm"
+                Disabled="@IsBusy"
+                OnClick="@OnApprove">
+            <Icon Kind="IconKind.Check" Size="IconSize.Default" />
+            Aprovar
+        </Button>
+    }
+
+    @if (_showReject)
+    {
+        <Button Variant="ButtonVariant.Destructive"
+                Size="ButtonSize.Sm"
+                Disabled="@IsBusy"
+                OnClick="@OnReject">
+            <Icon Kind="IconKind.X" Size="IconSize.Default" />
+            Reprovar
+        </Button>
+    }
+
+    @if (_showPayPayroll)
+    {
+        <Button Variant="ButtonVariant.Outline"
+                Size="ButtonSize.Sm"
+                Disabled="@IsBusy"
+                OnClick="@OnPayPayroll">
+            <Icon Kind="IconKind.Wallet" Size="IconSize.Default" />
+            Marcar folha paga
+        </Button>
+    }
+
+    @if (_showRecalculate)
+    {
+        <Button Variant="ButtonVariant.Outline"
+                Size="ButtonSize.Sm"
+                Disabled="@IsBusy"
+                OnClick="@OnRecalculate">
+            <Icon Kind="IconKind.TrendingUp" Size="IconSize.Default" />
+            Recalcular
+        </Button>
+    }
+
+    @if (_showDelete)
+    {
+        <Button Variant="ButtonVariant.Destructive"
+                Size="ButtonSize.Sm"
+                Disabled="@IsBusy"
+                OnClick="@OnDelete">
+            <Icon Kind="IconKind.Trash2" Size="IconSize.Default" />
+            Excluir
+        </Button>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PayrollAllowedActionsDto AllowedActions { get; set; } = default!;
+    [Parameter] public bool HasApprovePolicy { get; set; }
+    [Parameter] public bool HasPayPolicy { get; set; }
+    [Parameter] public bool HasWritePolicy { get; set; }
+    [Parameter] public bool HasDeletePolicy { get; set; }
+    [Parameter] public bool IsBusy { get; set; }
+    [Parameter] public EventCallback OnApprove { get; set; }
+    [Parameter] public EventCallback OnReject { get; set; }
+    [Parameter] public EventCallback OnPayPayroll { get; set; }
+    [Parameter] public EventCallback OnRecalculate { get; set; }
+    [Parameter] public EventCallback OnDelete { get; set; }
+
+    private bool _showApprove;
+    private bool _showReject;
+    private bool _showPayPayroll;
+    private bool _showRecalculate;
+    private bool _showDelete;
+
+    protected override void OnParametersSet()
+    {
+        _showApprove = AllowedActions.ApprovePayroll && HasApprovePolicy;
+        _showReject = AllowedActions.RejectPayroll && HasApprovePolicy;
+        _showPayPayroll = AllowedActions.PayPayroll && HasPayPolicy;
+        _showRecalculate = AllowedActions.Recalculate && HasWritePolicy;
+        _showDelete = AllowedActions.Delete && HasDeletePolicy;
+    }
+}

@@ -1,0 +1,40 @@
+@page "/payrolls"
+@attribute [Authorize(Policy = AppPolicies.PayrollsRead)]
+@using WebApp.Blazor.Layout
+@inject IAuthorizationService AuthorizationService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager NavigationManager
+
+<PageTitle>@ShellNavigation.PayrollsDisplayName — CorePay</PageTitle>
+
+<div class="payrolls-page-header">
+    <div>
+        <h1 class="text-page-title">@ShellNavigation.PayrollsDisplayName</h1>
+        <p class="text-page-subtitle">Consulte, filtre e duplique folhas de pagamento por competência.</p>
+    </div>
+    @if (_canWrite)
+    {
+        <Button OnClick="@NavigateToNewPayroll">
+            <Icon Kind="IconKind.Plus" />
+            Nova Folha
+        </Button>
+    }
+</div>
+
+<PayrollsSection />
+
+@code {
+    private bool _canWrite;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var writeAuthorization = await AuthorizationService.AuthorizeAsync(
+            authState.User,
+            AppPolicies.PayrollsWrite);
+        _canWrite = writeAuthorization.Succeeded;
+    }
+
+    private void NavigateToNewPayroll() =>
+        NavigationManager.NavigateTo("/payrolls/new");
+}

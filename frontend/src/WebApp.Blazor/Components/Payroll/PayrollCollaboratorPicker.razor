@@ -1,0 +1,118 @@
+@using WebApp.Blazor.Formatting
+<Dialog IsOpen="@IsOpen" IsOpenChanged="@IsOpenChanged" Title="Adicionar colaborador">
+    <div class="settings-form">
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <p class="settings-form__error" role="alert">@_error</p>
+        }
+
+        <Input Label="Buscar"
+               Placeholder="Nome do colaborador"
+               Value="@_search"
+               ValueChanged="@(value => _search = value ?? string.Empty)" />
+
+        @if (_loading)
+        {
+            <div class="settings-section__loading">
+                <Spinner Label="Carregando colaboradores..." />
+            </div>
+        }
+        else if (_availableCollaborators.Count == 0)
+        {
+            <EmptyState Title="Nenhum colaborador elegível"
+                        Description="Todos os colaboradores ativos do setor já foram adicionados ou não há colaboradores disponíveis." />
+        }
+        else if (!FilteredCollaborators.Any())
+        {
+            <EmptyState Title="Nenhum resultado"
+                        Description="Nenhum colaborador encontrado para a busca informada." />
+        }
+        else
+        {
+            <div class="payroll-picker-list">
+                @foreach (var collaborator in FilteredCollaborators)
+                {
+                    <button type="button"
+                            class="payroll-picker-list__item"
+                            disabled="@_submitting"
+                            @onclick="@(() => SelectCollaboratorAsync(collaborator))">
+                        <span class="collaborators-table__name">@collaborator.Name</span>
+                        <span class="collaborators-table__job-title">@(collaborator.CareerLevelName ?? "—")</span>
+                    </button>
+                }
+            </div>
+        }
+    </div>
+</Dialog>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+    [Parameter] public Guid? DepartmentId { get; set; }
+    [Parameter] public IReadOnlyCollection<Guid> ExcludedCollaboratorIds { get; set; } = [];
+    [Parameter] public EventCallback<CollaboratorDto> OnSelected { get; set; }
+
+    [Inject] private ICollaboratorApiService CollaboratorApi { get; set; } = default!;
+
+    private bool _loading;
+    private bool _submitting;
+    private string _search = string.Empty;
+    private string? _error;
+    private List<CollaboratorDto> _availableCollaborators = [];
+
+    private IEnumerable<CollaboratorDto> FilteredCollaborators
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(_search))
+            {
+                return _availableCollaborators;
+            }
+
+            return _availableCollaborators
+                .Where(c => c.Name.Contains(_search, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen && DepartmentId is not null)
+        {
+            await LoadCollaboratorsAsync();
+        }
+    }
+
+    private async Task LoadCollaboratorsAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        var result = await CollaboratorApi.GetCollaboratorsAsync(new CollaboratorListQuery(
+            DepartmentId: DepartmentId,
+            IsActive: true));
+
+        if (result.Status != CollaboratorApiStatus.Success || result.Collaborators is null)
+        {
+            _availableCollaborators = [];
+            _error = "Não foi possível carregar os colaboradores.";
+        }
+        else
+        {
+            _availableCollaborators = result.Collaborators
+                .Where(c => !ExcludedCollaboratorIds.Contains(c.Id))
+                .OrderBy(c => c.Name)
+                .ToList();
+        }
+
+        _loading = false;
+    }
+
+    private async Task SelectCollaboratorAsync(CollaboratorDto collaborator)
+    {
+        _submitting = true;
+        await OnSelected.InvokeAsync(collaborator);
+        _submitting = false;
+        await IsOpenChanged.InvokeAsync(false);
+        _search = string.Empty;
+    }
+}

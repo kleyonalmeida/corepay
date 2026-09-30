@@ -1,0 +1,14 @@
+@page "/payrolls/{Id:guid}"
+@attribute [Authorize(Policy = AppPolicies.PayrollsRead)]
+
+<PageTitle>Detalhe da folha — CorePay</PageTitle>
+
+<PayrollResourceGuard Id="@Id">
+    <ChildContent Context="payroll">
+        <PayrollDetailSection Payroll="@payroll" />
+    </ChildContent>
+</PayrollResourceGuard>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+}

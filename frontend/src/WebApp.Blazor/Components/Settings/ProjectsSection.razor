@@ -1,0 +1,159 @@
+@inject IProjectApiService ProjectApiService
+
+<Card Class="settings-section-card">
+    <HeaderContent>
+        <SectionCardHeader Title="Projetos" Icon="IconKind.Target">
+            <Actions>
+                <Button Size="ButtonSize.Sm" OnClick="@OpenCreateDialogAsync">
+                    Novo projeto
+                </Button>
+            </Actions>
+        </SectionCardHeader>
+    </HeaderContent>
+    <ChildContent>
+        @if (_isLoading)
+        {
+            <div class="settings-section__loading">
+                <Spinner Label="Carregando projetos..." />
+            </div>
+        }
+        else if (!string.IsNullOrWhiteSpace(_loadError))
+        {
+            <EmptyState Title="Erro ao carregar projetos" Description="@_loadError" />
+        }
+        else if (_projects.Count == 0)
+        {
+            <EmptyState Title="Nenhum projeto cadastrado"
+                        Description="Crie o primeiro projeto para configurar plataformas e rateios." />
+        }
+        else
+        {
+            <div class="settings-table-wrapper">
+                <table class="settings-table">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Cliente</th>
+                            <th>Plataforma</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var project in _projects)
+                        {
+                            <tr>
+                                <td>@project.Name</td>
+                                <td>@(string.IsNullOrWhiteSpace(project.Client) ? "—" : project.Client)</td>
+                                <td>@ProjectPlatformLabels.GetLabel(project.Platform)</td>
+                                <td>
+                                    <StatusBadge Kind="@(project.IsActive ? StatusKind.Active : StatusKind.Inactive)" />
+                                </td>
+                                <td class="settings-table__actions">
+                                    <Button Variant="ButtonVariant.Ghost"
+                                            Size="ButtonSize.Sm"
+                                            OnClick="@(() => OpenEditDialogAsync(project))">
+                                        Editar
+                                    </Button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </ChildContent>
+</Card>
+
+<ProjectFormDialog IsOpen="@_dialogOpen"
+                   IsOpenChanged="@OnDialogOpenChangedAsync"
+                   EditTarget="@_editTarget"
+                   IsSaving="@_isSaving"
+                   ErrorMessage="@_formError"
+                   OnSubmit="@SaveAsync" />
+
+@code {
+    private readonly List<ProjectDto> _projects = [];
+    private bool _isLoading = true;
+    private string? _loadError;
+    private bool _dialogOpen;
+    private bool _isSaving;
+    private string? _formError;
+    private ProjectDto? _editTarget;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProjectsAsync();
+    }
+
+    private async Task LoadProjectsAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+
+        var result = await ProjectApiService.GetProjectsAsync();
+        _projects.Clear();
+
+        if (result.Status == ProjectApiStatus.Success && result.Projects is not null)
+        {
+            _projects.AddRange(result.Projects);
+        }
+        else
+        {
+            _loadError = ProjectErrorMessages.ForList(result);
+        }
+
+        _isLoading = false;
+    }
+
+    private Task OpenCreateDialogAsync()
+    {
+        _editTarget = null;
+        _formError = null;
+        _dialogOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private Task OpenEditDialogAsync(ProjectDto project)
+    {
+        _editTarget = project;
+        _formError = null;
+        _dialogOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private Task OnDialogOpenChangedAsync(bool isOpen)
+    {
+        _dialogOpen = isOpen;
+        if (!isOpen)
+        {
+            _editTarget = null;
+            _formError = null;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task SaveAsync(ProjectRequest request)
+    {
+        _isSaving = true;
+        _formError = null;
+
+        ProjectMutationResult result = _editTarget is null
+            ? await ProjectApiService.CreateProjectAsync(request)
+            : await ProjectApiService.UpdateProjectAsync(_editTarget.Id, request);
+
+        if (result.Status == ProjectApiStatus.Success && result.Project is not null)
+        {
+            _dialogOpen = false;
+            _editTarget = null;
+            await LoadProjectsAsync();
+        }
+        else
+        {
+            _formError = ProjectErrorMessages.ForMutation(result);
+        }
+
+        _isSaving = false;
+    }
+}

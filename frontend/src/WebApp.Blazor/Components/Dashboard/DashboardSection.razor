@@ -1,0 +1,230 @@
+@using WebApp.Blazor.Formatting
+@inject IDashboardApiService DashboardApiService
+@inject NavigationManager NavigationManager
+
+<section class="dashboard-section">
+    <div class="dashboard-filters" aria-label="Filtros do dashboard">
+        <Select Label="Mês"
+                Value="@_monthFilter"
+                ValueChanged="OnMonthChangedAsync"
+                Disabled="@_isLoading">
+            @for (var month = 1; month <= 12; month++)
+            {
+                <option value="@month">@CompetenceFormatter.Format(month, 2000).Split('/')[0]</option>
+            }
+        </Select>
+        <Select Label="Ano"
+                Value="@_yearFilter"
+                ValueChanged="OnYearChangedAsync"
+                Disabled="@_isLoading">
+            @foreach (var year in _yearOptions)
+            {
+                <option value="@year">@year</option>
+            }
+        </Select>
+    </div>
+
+    @if (_isLoading)
+    {
+        <Card Class="dashboard-content-card">
+            <ChildContent>
+                <div class="settings-section__loading">
+                    <Spinner Label="Carregando dashboard..." />
+                </div>
+            </ChildContent>
+        </Card>
+    }
+    else if (!string.IsNullOrWhiteSpace(_loadError))
+    {
+        <Card Class="dashboard-content-card">
+            <ChildContent>
+                <EmptyState Title="Erro ao carregar dashboard" Description="@_loadError" />
+            </ChildContent>
+        </Card>
+    }
+    else if (_dashboard is not null)
+    {
+        @if (_dashboard.PayrollStats is null
+             && _dashboard.ActiveCollaborators is null
+             && _dashboard.RecentPayrolls is null)
+        {
+            <Card Class="dashboard-content-card">
+                <ChildContent>
+                    <EmptyState Title="Nenhum indicador disponível"
+                                Description="Seu perfil não possui acesso aos dados operacionais do dashboard." />
+                </ChildContent>
+            </Card>
+        }
+        else
+        {
+            @if (_dashboard.PayrollStats is not null)
+            {
+                <div class="dashboard-stats-grid dashboard-stats-grid--primary">
+                    <StatCard Label="Total de Folhas de Pagamento"
+                              ValueText="@_dashboard.PayrollStats.TotalPayrolls.ToString()"
+                              Tone="SemanticTone.Blue" />
+                    <StatCard Label="Aguardando"
+                              ValueText="@_dashboard.PayrollStats.AwaitingApproval.ToString()"
+                              Tone="SemanticTone.Yellow" />
+                    <StatCard Label="Aprovadas"
+                              ValueText="@_dashboard.PayrollStats.Approved.ToString()"
+                              Tone="SemanticTone.Emerald" />
+                    <StatCard Label="Reprovadas"
+                              ValueText="@_dashboard.PayrollStats.Rejected.ToString()"
+                              Tone="SemanticTone.Red" />
+                </div>
+            }
+
+            @if (_dashboard.PayrollStats is not null || _dashboard.ActiveCollaborators is not null)
+            {
+                <div class="dashboard-stats-grid dashboard-stats-grid--secondary">
+                    @if (_dashboard.PayrollStats is not null)
+                    {
+                        <StatCard Label="Total a pagar"
+                                  Value="@_dashboard.PayrollStats.TotalToPay"
+                                  Tone="SemanticTone.Primary" />
+                        <StatCard Label="Total pago"
+                                  Value="@_dashboard.PayrollStats.TotalPaid"
+                                  Tone="SemanticTone.Emerald"
+                                  Icon="IconKind.Wallet" />
+                    }
+                    @if (_dashboard.ActiveCollaborators is not null)
+                    {
+                        <StatCard Label="Colaboradores ativos"
+                                  ValueText="@_dashboard.ActiveCollaborators.Value.ToString()"
+                                  Tone="SemanticTone.Purple" />
+                    }
+                </div>
+            }
+
+            @if (_dashboard.RecentPayrolls is not null)
+            {
+                <Card Class="dashboard-recent-card">
+                    <HeaderContent>
+                        <div class="dashboard-recent-card__header">
+                            <div>
+                                <h2 class="text-card-title">Folhas de pagamento recentes</h2>
+                                <p class="text-page-subtitle">Últimas competências cadastradas</p>
+                            </div>
+                        </div>
+                    </HeaderContent>
+                    <ChildContent>
+                        @if (_dashboard.RecentPayrolls.Count == 0)
+                        {
+                            <EmptyState Title="Nenhuma folha cadastrada"
+                                        Description="As folhas de pagamento mais recentes aparecerão aqui." />
+                        }
+                        else
+                        {
+                            <div class="settings-table-wrapper">
+                                <table class="settings-table dashboard-recent-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Setor</th>
+                                            <th>Competência</th>
+                                            <th>Status</th>
+                                            <th class="dashboard-recent-table__money">Total</th>
+                                            <th class="dashboard-recent-table__count">Colaboradores</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var payroll in _dashboard.RecentPayrolls)
+                                        {
+                                            <tr class="@GetRecentRowClass(payroll)"
+                                                tabindex="0"
+                                                @onclick="@(() => NavigateToPayroll(payroll.Id))"
+                                                @onkeydown="@((args) => OnRecentRowKeyDown(args, payroll.Id))">
+                                                <td>@payroll.DepartmentName</td>
+                                                <td>@CompetenceFormatter.Format(payroll.Month, payroll.Year)</td>
+                                                <td>
+                                                    <StatusBadge Kind="@PayrollStatusMapper.ToStatusKind(payroll.Status)" />
+                                                </td>
+                                                <td class="dashboard-recent-table__money">
+                                                    @MoneyFormatter.FormatMoney(payroll.TotalAmount)
+                                                </td>
+                                                <td class="dashboard-recent-table__count">@payroll.EntryCount</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </ChildContent>
+                </Card>
+            }
+        }
+    }
+</section>
+
+@code {
+    private DashboardDto? _dashboard;
+    private bool _isLoading = true;
+    private string? _loadError;
+    private string? _monthFilter;
+    private string? _yearFilter;
+    private IReadOnlyList<int> _yearOptions = [];
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync(DashboardQuery? query = null)
+    {
+        _isLoading = true;
+        _loadError = null;
+        try
+        {
+            var result = await DashboardApiService.GetAsync(query);
+            if (result.Status != DashboardApiStatus.Success || result.Data is null)
+            {
+                _dashboard = null;
+                _loadError = DashboardErrorMessages.ForLoad(result);
+                return;
+            }
+
+            _dashboard = result.Data;
+            _monthFilter = result.Data.Month.ToString();
+            _yearFilter = result.Data.Year.ToString();
+            _yearOptions = Enumerable.Range(result.Data.Year - 4, 7)
+                .OrderByDescending(year => year)
+                .ToList();
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task OnMonthChangedAsync(string? value)
+    {
+        _monthFilter = value;
+        await ReloadSelectedCompetenceAsync();
+    }
+
+    private async Task OnYearChangedAsync(string? value)
+    {
+        _yearFilter = value;
+        await ReloadSelectedCompetenceAsync();
+    }
+
+    private async Task ReloadSelectedCompetenceAsync()
+    {
+        if (int.TryParse(_monthFilter, out var month)
+            && int.TryParse(_yearFilter, out var year))
+        {
+            await LoadAsync(new DashboardQuery(month, year));
+        }
+    }
+
+    private void NavigateToPayroll(Guid payrollId) =>
+        NavigationManager.NavigateTo($"/payrolls/{payrollId}");
+
+    private void OnRecentRowKeyDown(KeyboardEventArgs args, Guid payrollId)
+    {
+        if (args.Key is "Enter" or " ")
+        {
+            NavigateToPayroll(payrollId);
+        }
+    }
+
+    private static string GetRecentRowClass(DashboardRecentPayrollDto payroll) =>
+        $"dashboard-recent-table__row {(payroll.Status.Equals("paid", StringComparison.OrdinalIgnoreCase) ? "dashboard-recent-table__row--paid" : null)}";
+}

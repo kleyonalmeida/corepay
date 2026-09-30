@@ -1,0 +1,32 @@
+<span class="@CssClass"
+      aria-hidden="@(AriaHidden ? "true" : null)"
+      @attributes="AdditionalAttributes">
+    <LucideIcon Name="@IconMetadata.GetLucideName(Kind)"
+                Size="@((int)Size)"
+                Fill="none"
+                Stroke="currentColor"
+                StrokeWidth="2"
+                StrokeLineCap="round"
+                StrokeLineJoin="round" />
+</span>
+
+@code {
+    [Parameter, EditorRequired] public IconKind Kind { get; set; }
+    [Parameter] public IconSize Size { get; set; } = IconSize.Default;
+    [Parameter] public bool AriaHidden { get; set; } = true;
+    [Parameter] public string? Class { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string CssClass => string.Join(' ', new[]
+    {
+        "ui-icon",
+        Size switch
+        {
+            IconSize.Topbar => "ui-icon--topbar",
+            IconSize.AuthHero => "ui-icon--auth-hero",
+            IconSize.EmptyState => "ui-icon--empty-state",
+            _ => "ui-icon--default"
+        },
+        Class
+    }.Where(static c => !string.IsNullOrWhiteSpace(c)));
+}

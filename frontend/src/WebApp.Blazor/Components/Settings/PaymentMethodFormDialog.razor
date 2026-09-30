@@ -1,0 +1,74 @@
+<Dialog IsOpen="@IsOpen" IsOpenChanged="@IsOpenChanged" Title="@DialogTitle">
+    <div class="settings-form">
+        @if (!string.IsNullOrWhiteSpace(DisplayError))
+        {
+            <p class="settings-form__error" role="alert">@DisplayError</p>
+        }
+
+        <Input Label="Nome"
+               Value="@_name"
+               ValueChanged="@(value => _name = value ?? string.Empty)"
+               Disabled="@IsSaving" />
+
+        <GoalToggle Label="Ativo"
+                    Value="@_isActive"
+                    ValueChanged="@(value => _isActive = value)" />
+
+        <FormDialogActions IsSaving="@IsSaving"
+                           SubmitLabel="@(IsSaving ? "Salvando..." : "Salvar")"
+                           OnSubmit="@SubmitAsync"
+                           OnCancel="@CancelAsync" />
+    </div>
+</Dialog>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+    [Parameter] public PaymentMethodDto? EditTarget { get; set; }
+    [Parameter] public bool IsSaving { get; set; }
+    [Parameter] public string? ErrorMessage { get; set; }
+    [Parameter] public EventCallback<PaymentMethodRequest> OnSubmit { get; set; }
+
+    private string _name = string.Empty;
+    private bool _isActive = true;
+    private string? _localError;
+
+    private string DialogTitle => EditTarget is null ? "Nova forma de pagamento" : "Editar forma de pagamento";
+    private string? DisplayError => _localError ?? ErrorMessage;
+
+    protected override void OnParametersSet()
+    {
+        if (!IsOpen)
+        {
+            return;
+        }
+
+        _localError = null;
+
+        if (EditTarget is null)
+        {
+            _name = string.Empty;
+            _isActive = true;
+            return;
+        }
+
+        _name = EditTarget.Name;
+        _isActive = EditTarget.IsActive;
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_name))
+        {
+            _localError = "O nome é obrigatório.";
+            return;
+        }
+
+        await OnSubmit.InvokeAsync(new PaymentMethodRequest(_name.Trim(), _isActive));
+    }
+
+    private async Task CancelAsync()
+    {
+        await IsOpenChanged.InvokeAsync(false);
+    }
+}

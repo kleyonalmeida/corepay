@@ -1,0 +1,204 @@
+@inject IRoleApiService RoleApiService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IAuthorizationService AuthorizationService
+
+<Card Class="settings-section-card">
+    <HeaderContent>
+        <SectionCardHeader Title="Papéis e acessos" Icon="IconKind.Settings">
+            <Actions>
+                @if (_canWrite)
+                {
+                    <Button Size="ButtonSize.Sm"
+                            Disabled="@(!CanOpenForm)"
+                            OnClick="@OpenCreateDialogAsync">
+                        Novo papel
+                    </Button>
+                }
+            </Actions>
+        </SectionCardHeader>
+    </HeaderContent>
+    <ChildContent>
+        @if (_isLoading)
+        {
+            <div class="settings-section__loading"><Spinner Label="Carregando papéis..." /></div>
+        }
+        else if (!string.IsNullOrWhiteSpace(_loadError))
+        {
+            <EmptyState Title="Erro ao carregar papéis" Description="@_loadError" />
+        }
+        else if (_roles.Count == 0)
+        {
+            <EmptyState Title="Nenhum papel cadastrado" Description="Crie um papel e defina seus acessos." />
+        }
+        else
+        {
+            <div class="settings-table-wrapper">
+                <table class="settings-table roles-table">
+                    <thead><tr><th>Papel</th><th>Acessos</th><th>Áreas disponíveis</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var role in _roles)
+                        {
+                            <tr>
+                                <td><strong>@role.Name</strong>@if (IsSystemRole(role)) { <span class="settings-chip">Sistema</span> }</td>
+                                <td class="tabular-nums">@FormatPermissionCount(role.PermissionKeys.Count)</td>
+                                <td>
+                                    <div class="settings-chip-list">
+                                        @foreach (var area in GetAreas(role).Take(5))
+                                        {
+                                            <span class="settings-chip">@area</span>
+                                        }
+                                    </div>
+                                </td>
+                                <td class="settings-table__actions">
+                                    @if (_canWrite && !IsSystemRole(role))
+                                    {
+                                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Sm"
+                                                Disabled="@(!CanOpenForm)"
+                                                OnClick="@(() => OpenEditDialogAsync(role))">Editar acessos</Button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        @if (_canWrite && !string.IsNullOrWhiteSpace(_catalogError))
+        {
+            <p class="settings-form__error settings-section__catalog-error" role="alert">@_catalogError</p>
+        }
+    </ChildContent>
+</Card>
+
+<RoleFormDialog IsOpen="@_dialogOpen"
+                IsOpenChanged="@OnDialogOpenChangedAsync"
+                EditTarget="@_editTarget"
+                Permissions="@_permissions"
+                IsSaving="@_isSaving"
+                ErrorMessage="@_formError"
+                OnSubmit="@SaveAsync" />
+
+@code {
+    private readonly List<RoleDto> _roles = [];
+    private readonly List<PermissionDto> _permissions = [];
+    private bool _isLoading = true;
+    private bool _canWrite;
+    private string? _loadError;
+    private string? _catalogError;
+    private bool _dialogOpen;
+    private bool _isSaving;
+    private string? _formError;
+    private RoleDto? _editTarget;
+
+    private bool CanOpenForm => _canWrite && _permissions.Count > 0 && string.IsNullOrWhiteSpace(_catalogError);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var write = await AuthorizationService.AuthorizeAsync(authState.User, AppPolicies.RolesWrite);
+        var readPermissions = await AuthorizationService.AuthorizeAsync(authState.User, AppPolicies.PermissionsRead);
+        _canWrite = authState.User.IsInRole(AppRoles.SuperAdmin) && write.Succeeded && readPermissions.Succeeded;
+
+        await LoadRolesAsync();
+        if (_canWrite)
+        {
+            await LoadPermissionsAsync();
+        }
+    }
+
+    private async Task LoadRolesAsync()
+    {
+        _isLoading = true;
+        var result = await RoleApiService.GetRolesAsync();
+        _roles.Clear();
+        if (result.Status == RoleApiStatus.Success && result.Roles is not null)
+        {
+            _roles.AddRange(result.Roles.OrderBy(role => role.Name, StringComparer.OrdinalIgnoreCase));
+        }
+        else
+        {
+            _loadError = result.Status == RoleApiStatus.Forbidden
+                ? "Você não possui acesso para consultar papéis."
+                : "Não foi possível carregar os papéis.";
+        }
+        _isLoading = false;
+    }
+
+    private async Task LoadPermissionsAsync()
+    {
+        var result = await RoleApiService.GetPermissionsAsync();
+        _permissions.Clear();
+        if (result.Status == RoleApiStatus.Success && result.Permissions is not null)
+        {
+            _permissions.AddRange(result.Permissions.OrderBy(permission => permission.Key));
+            return;
+        }
+        _catalogError = "Não foi possível carregar o catálogo de permissões.";
+    }
+
+    private Task OpenCreateDialogAsync()
+    {
+        _editTarget = null;
+        _formError = null;
+        _dialogOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private Task OpenEditDialogAsync(RoleDto role)
+    {
+        _editTarget = role;
+        _formError = null;
+        _dialogOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private Task OnDialogOpenChangedAsync(bool value)
+    {
+        _dialogOpen = value;
+        return Task.CompletedTask;
+    }
+
+    private async Task SaveAsync(RoleFormSubmit submit)
+    {
+        _isSaving = true;
+        _formError = null;
+        var result = _editTarget is null
+            ? await RoleApiService.CreateRoleAsync(new CreateRoleRequest(submit.Name, submit.PermissionKeys))
+            : await RoleApiService.UpdateRoleAsync(_editTarget.Id, new UpdateRoleRequest(submit.Name, submit.PermissionKeys));
+        _isSaving = false;
+
+        if (result.Status != RoleApiStatus.Success || result.Role is null)
+        {
+            _formError = MapError(result);
+            return;
+        }
+
+        var index = _roles.FindIndex(role => role.Id == result.Role.Id);
+        if (index >= 0) _roles[index] = result.Role; else _roles.Add(result.Role);
+        _roles.Sort((left, right) => StringComparer.OrdinalIgnoreCase.Compare(left.Name, right.Name));
+        _dialogOpen = false;
+    }
+
+    private static bool IsSystemRole(RoleDto role) =>
+        string.Equals(role.Name, AppRoles.SuperAdmin, StringComparison.OrdinalIgnoreCase);
+
+    private static string FormatPermissionCount(int count) => count == 1 ? "1 permissão" : $"{count} permissões";
+
+    private static IEnumerable<string> GetAreas(RoleDto role) => role.PermissionKeys
+        .Select(RoleAccessCatalog.ForKey)
+        .Where(descriptor => descriptor is not null)
+        .Select(descriptor => descriptor!.Area)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .OrderBy(area => area);
+
+    private static string MapError(RoleMutationResult result) => result.ErrorCode switch
+    {
+        "roles.duplicate" => "Já existe um papel com esse nome.",
+        "roles.permissions_required" => "Selecione ao menos uma permissão.",
+        "roles.permission_not_found" => "Uma das permissões selecionadas não existe mais.",
+        "roles.superadmin_immutable" => "O papel SuperAdmin é protegido e não pode ser alterado.",
+        _ when result.Status == RoleApiStatus.Forbidden => "Somente SuperAdmin pode gerenciar papéis.",
+        _ => "Não foi possível salvar o papel."
+    };
+}

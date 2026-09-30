@@ -1,0 +1,67 @@
+@using WebApp.Blazor.Formatting
+
+<article class="@CssClass"
+         tabindex="0"
+         @onclick="HandleOpenAsync"
+         @onkeydown="HandleKeyDownAsync">
+    <div class="@IconCssClass" aria-hidden="true">
+        <Icon Kind="@IconKind" Size="IconSize.Default" />
+    </div>
+
+    <div class="notification-row__content">
+        <div class="notification-row__header">
+            <h2 class="notification-row__title">@Notification.Title</h2>
+            <time class="notification-row__time" datetime="@Notification.CreatedAt.ToString("O")">
+                @DateTimeFormatter.FormatDateTime(Notification.CreatedAt)
+            </time>
+        </div>
+        <p class="notification-row__message">@Notification.Message</p>
+        @if (!Notification.IsRead)
+        {
+            <div class="notification-row__mark-read-wrap" @onclick:stopPropagation="true">
+                <Button Variant="ButtonVariant.Ghost"
+                        Size="ButtonSize.Sm"
+                        Class="notification-row__mark-read"
+                        OnClick="HandleMarkReadAsync">
+                    Marcar como lida
+                </Button>
+            </div>
+        }
+    </div>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public NotificationDto Notification { get; set; } = default!;
+
+    [Parameter, EditorRequired] public EventCallback<NotificationDto> OnOpen { get; set; }
+
+    [Parameter, EditorRequired] public EventCallback<NotificationDto> OnMarkRead { get; set; }
+
+    private (SemanticTone Tone, IconKind Icon, string IconCssClass) _visual = default!;
+
+    private string CssClass =>
+        Notification.IsRead
+            ? "notification-row notification-row--read"
+            : "notification-row notification-row--unread";
+
+    private string IconCssClass => $"notification-row__icon {_visual.IconCssClass}";
+
+    private IconKind IconKind => _visual.Icon;
+
+    protected override void OnParametersSet()
+    {
+        _visual = NotificationToneMapper.Resolve(Notification.Type);
+    }
+
+    private Task HandleOpenAsync() => OnOpen.InvokeAsync(Notification);
+
+    private Task HandleMarkReadAsync() => OnMarkRead.InvokeAsync(Notification);
+
+    private async Task HandleKeyDownAsync(KeyboardEventArgs args)
+    {
+        if (args.Key is "Enter" or " ")
+        {
+            await HandleOpenAsync();
+        }
+    }
+}

@@ -1,0 +1,142 @@
+@using System.Security.Claims
+@inject AuthService AuthService
+@inject SidebarState SidebarState
+@inject NavigationManager NavigationManager
+@inject IAuthorizationService AuthorizationService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@implements IDisposable
+
+<aside class="app-sidebar" aria-label="Menu principal">
+    <div class="app-sidebar__logo">
+        <div class="app-sidebar__logo-mark" aria-hidden="true">
+            <Icon Kind="IconKind.DollarSign" />
+        </div>
+        <div class="app-sidebar__logo-text app-sidebar__collapsible-text">
+            <span class="text-brand">CorePay</span>
+            <span class="text-sidebar-tagline">Gestão de Pagamentos</span>
+        </div>
+    </div>
+
+    <nav class="app-sidebar__nav">
+        @foreach (var item in _mainItems)
+        {
+            <NavLink href="@item.Href"
+                     class="app-sidebar__nav-link text-nav-item"
+                     ActiveClass="app-sidebar__nav-link--active"
+                     Match="@GetMatch(item.Href)"
+                     title="@item.Title"
+                     @onclick="HandleNavClickAsync">
+                <Icon Kind="@item.Icon" Class="app-sidebar__nav-icon" />
+                <span class="app-sidebar__nav-label app-sidebar__collapsible-text">@item.Label</span>
+            </NavLink>
+        }
+
+        @if (_showAdminSection)
+        {
+            <div class="app-sidebar__section-label text-label app-sidebar__collapsible-text">Administração</div>
+
+            @foreach (var item in _adminItems)
+            {
+                <NavLink href="@item.Href"
+                         class="app-sidebar__nav-link text-nav-item"
+                         ActiveClass="app-sidebar__nav-link--active"
+                         Match="@GetMatch(item.Href)"
+                         title="@item.Title"
+                         @onclick="HandleNavClickAsync">
+                    <Icon Kind="@item.Icon" Class="app-sidebar__nav-icon" />
+                    <span class="app-sidebar__nav-label app-sidebar__collapsible-text">@item.Label</span>
+                </NavLink>
+            }
+        }
+    </nav>
+
+    @if (AuthService.CurrentSession?.User is { } user)
+    {
+        <div class="app-sidebar__footer">
+            <div class="app-sidebar__user-card">
+                <Avatar Name="@user.DisplayName" Size="AvatarSize.Sm" />
+                <div class="app-sidebar__user-info app-sidebar__collapsible-text">
+                    <span class="app-sidebar__user-name">@user.DisplayName</span>
+                    <span class="app-sidebar__user-email text-label">@user.Email</span>
+                </div>
+            </div>
+            <LogoutButton Class="app-sidebar__logout" />
+        </div>
+    }
+</aside>
+
+@code {
+    private IReadOnlyList<ShellNavItem> _mainItems = [];
+    private IReadOnlyList<ShellNavItem> _adminItems = [];
+    private bool _showAdminSection;
+
+    protected override async Task OnInitializedAsync()
+    {
+        SidebarState.StateChanged += HandleSidebarStateChanged;
+        AuthenticationStateProvider.AuthenticationStateChanged += HandleAuthenticationStateChanged;
+        await RefreshNavigationAsync();
+    }
+
+    private async void HandleAuthenticationStateChanged(Task authenticationStateTask)
+    {
+        await authenticationStateTask;
+        await RefreshNavigationAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void HandleSidebarStateChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task RefreshNavigationAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _mainItems = await FilterItemsAsync(ShellNavigation.MainItems, authState.User);
+        _adminItems = await FilterItemsAsync(ShellNavigation.AdminItems, authState.User);
+        _showAdminSection = _adminItems.Count > 0;
+    }
+
+    private async Task<IReadOnlyList<ShellNavItem>> FilterItemsAsync(
+        IReadOnlyList<ShellNavItem> items,
+        ClaimsPrincipal user)
+    {
+        var visible = new List<ShellNavItem>();
+
+        foreach (var item in items)
+        {
+            if (await IsVisibleAsync(user, item))
+            {
+                visible.Add(item);
+            }
+        }
+
+        return visible;
+    }
+
+    private async Task<bool> IsVisibleAsync(ClaimsPrincipal user, ShellNavItem item)
+    {
+        if (item.Policy is null)
+        {
+            return user.Identity?.IsAuthenticated == true;
+        }
+
+        var result = await AuthorizationService.AuthorizeAsync(user, item.Policy);
+        return result.Succeeded;
+    }
+
+    private static NavLinkMatch GetMatch(string href) =>
+        href == "/" ? NavLinkMatch.All : NavLinkMatch.Prefix;
+
+    private Task HandleNavClickAsync()
+    {
+        SidebarState.CloseMobileDrawer();
+        return Task.CompletedTask;
+    }
+
+    public void Dispose()
+    {
+        SidebarState.StateChanged -= HandleSidebarStateChanged;
+        AuthenticationStateProvider.AuthenticationStateChanged -= HandleAuthenticationStateChanged;
+    }
+}

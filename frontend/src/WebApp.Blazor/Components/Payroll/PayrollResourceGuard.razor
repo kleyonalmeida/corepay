@@ -1,0 +1,61 @@
+@inject IPayrollApiService PayrollApi
+
+@if (_loading)
+{
+    <div class="auth-loading">
+        <Spinner Label="Carregando folha..." />
+        <span>Carregando...</span>
+    </div>
+}
+else if (_status == PayrollAccessStatus.Forbidden)
+{
+    <AccessDenied />
+}
+else if (_status == PayrollAccessStatus.NotFound)
+{
+    <EmptyState Title="Folha não encontrada"
+                Description="A folha solicitada não existe ou foi removida.">
+        <IconContent>
+            <Icon Kind="IconKind.FileText" Size="IconSize.EmptyState" />
+        </IconContent>
+    </EmptyState>
+}
+else if (_status == PayrollAccessStatus.Error)
+{
+    <EmptyState Title="Não foi possível carregar a folha"
+                Description="Tente novamente em instantes.">
+        <IconContent>
+            <Icon Kind="IconKind.FileText" Size="IconSize.EmptyState" />
+        </IconContent>
+    </EmptyState>
+}
+else if (_payroll is not null && ChildContent is not null)
+{
+    @ChildContent(_payroll)
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid Id { get; set; }
+    [Parameter] public RenderFragment<PayrollDetailDto>? ChildContent { get; set; }
+
+    private bool _loading = true;
+    private PayrollAccessStatus _status;
+    private PayrollDetailDto? _payroll;
+    private Guid? _loadedId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedId == Id && _payroll is not null)
+        {
+            _loading = false;
+            return;
+        }
+
+        _loading = true;
+        var result = await PayrollApi.GetPayrollAsync(Id);
+        _status = result.Status;
+        _payroll = result.Payroll;
+        _loadedId = Id;
+        _loading = false;
+    }
+}

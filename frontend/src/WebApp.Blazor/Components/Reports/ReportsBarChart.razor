@@ -1,0 +1,39 @@
+@using WebApp.Blazor.Formatting
+
+<div class="reports-bar-chart" role="img" aria-label="@AriaLabel">
+    @if (Items.Count == 0)
+    {
+        <p class="reports-bar-chart__empty">Sem dados para exibir.</p>
+    }
+    else
+    {
+        var maxValue = Items.Max(item => item.Value);
+        if (maxValue <= 0m)
+        {
+            maxValue = 1m;
+        }
+
+        <div class="reports-bar-chart__plot">
+            @foreach (var item in Items)
+            {
+                var heightPercent = Math.Round(item.Value / maxValue * 100m, 2);
+                <div class="reports-bar-chart__column">
+                    <div class="reports-bar-chart__bar-wrapper">
+                        <div class="reports-bar-chart__bar reports-bar-chart__bar--@item.ColorIndex"
+                             style="height: @(heightPercent)%;"
+                             title="@($"{item.Label}: {MoneyFormatter.FormatMoney(item.Value)}")">
+                        </div>
+                    </div>
+                    <span class="reports-bar-chart__label">@item.Label</span>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<ReportsBarChartItem> Items { get; set; } = [];
+    [Parameter] public string AriaLabel { get; set; } = "Gráfico de barras";
+
+    public sealed record ReportsBarChartItem(string Label, decimal Value, int ColorIndex);
+}

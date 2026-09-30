@@ -1,0 +1,298 @@
+@inject IAnalystMetricApiService AnalystMetricApiService
+@inject ICollaboratorApiService CollaboratorApiService
+@inject IProjectApiService ProjectApiService
+@inject IAuthorizationService AuthorizationService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<div class="analyst-metrics-page">
+    @if (!string.IsNullOrWhiteSpace(_actionMessage))
+    {
+        <div class="analyst-metrics-action-message" role="status">@_actionMessage</div>
+    }
+
+    <Card Class="analyst-metrics-filters-card">
+        <ChildContent>
+            <div class="analyst-metrics-filters">
+                <Select Label="Mês" Value="@_monthFilter" ValueChanged="@OnMonthChangedAsync">
+                    @foreach (var option in PayrollCompetenceDefaults.MonthOptions)
+                    {
+                        <option value="@option.Value">@option.Label</option>
+                    }
+                </Select>
+                <Select Label="Ano" Value="@_yearFilter" ValueChanged="@OnYearChangedAsync">
+                    @foreach (var year in _yearOptions)
+                    {
+                        <option value="@year">@year</option>
+                    }
+                </Select>
+                <Select Label="Colaborador"
+                        Value="@_collaboratorFilter"
+                        ValueChanged="@OnCollaboratorChangedAsync"
+                        Disabled="@_isLoadingOptions">
+                    <option value="">Todos os colaboradores</option>
+                    @foreach (var collaborator in _collaborators.OrderBy(item => item.Name))
+                    {
+                        <option value="@collaborator.Id">@collaborator.Name</option>
+                    }
+                </Select>
+                <Select Label="Projeto"
+                        Value="@_projectFilter"
+                        ValueChanged="@OnProjectChangedAsync"
+                        Disabled="@_isLoadingOptions">
+                    <option value="">Todos os projetos</option>
+                    @foreach (var project in _projects.OrderBy(item => item.Name))
+                    {
+                        <option value="@project.Id">@project.Name</option>
+                    }
+                </Select>
+            </div>
+        </ChildContent>
+    </Card>
+
+    <Card Class="analyst-metrics-table-card">
+        <HeaderContent>
+            <SectionCardHeader Title="Métricas por colaborador e projeto" Icon="IconKind.BarChart3">
+                <Actions>
+                    @if (_canWrite)
+                    {
+                        <Button Size="ButtonSize.Sm" OnClick="@OpenCreateDialogAsync">Nova métrica</Button>
+                    }
+                </Actions>
+            </SectionCardHeader>
+        </HeaderContent>
+        <ChildContent>
+            @if (_isLoading)
+            {
+                <div class="settings-section__loading">
+                    <Spinner Label="Carregando métricas..." />
+                </div>
+            }
+            else if (!string.IsNullOrWhiteSpace(_loadError))
+            {
+                <EmptyState Title="Erro ao carregar métricas" Description="@_loadError" />
+            }
+            else if (_metrics.Count == 0)
+            {
+                <EmptyState Title="Nenhuma métrica encontrada"
+                            Description="@(_canWrite ? "Cadastre uma métrica ou ajuste os filtros." : "Ajuste os filtros para encontrar registros.")" />
+            }
+            else
+            {
+                <div class="settings-table-wrapper">
+                    <table class="settings-table analyst-metrics-table">
+                        <thead>
+                            <tr>
+                                <th>Colaborador</th>
+                                <th>Setor</th>
+                                <th>Projeto</th>
+                                <th>Competência</th>
+                                <th class="analyst-metrics-table__number">FTD</th>
+                                <th class="analyst-metrics-table__number">CPA</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var metric in _metrics)
+                            {
+                                <tr>
+                                    <td>@metric.CollaboratorName</td>
+                                    <td>@metric.DepartmentName</td>
+                                    <td>@metric.ProjectName</td>
+                                    <td class="tabular-nums">@CompetenceFormatter.Format(metric.Month, metric.Year)</td>
+                                    <td class="analyst-metrics-table__number tabular-nums">@metric.FtdTotal</td>
+                                    <td class="analyst-metrics-table__number tabular-nums">@metric.CpaCount</td>
+                                    <td class="settings-table__actions">
+                                        @if (_canWrite)
+                                        {
+                                            <Button Variant="ButtonVariant.Ghost"
+                                                    Size="ButtonSize.Sm"
+                                                    OnClick="@(() => OpenEditDialogAsync(metric))">
+                                                Editar
+                                            </Button>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </ChildContent>
+    </Card>
+</div>
+
+<AnalystMetricFormDialog IsOpen="@_dialogOpen"
+                         IsOpenChanged="@OnDialogOpenChangedAsync"
+                         EditTarget="@_editTarget"
+                         Collaborators="@_collaborators"
+                         Projects="@_projects"
+                         YearOptions="@_yearOptions"
+                         DefaultMonth="@_defaultMonth"
+                         DefaultYear="@_defaultYear"
+                         IsSaving="@_isSaving"
+                         ErrorMessage="@_formError"
+                         OnSubmit="@SaveAsync" />
+
+@code {
+    private readonly List<AnalystMetricDto> _metrics = [];
+    private readonly List<CollaboratorDto> _collaborators = [];
+    private readonly List<ProjectDto> _projects = [];
+    private IReadOnlyList<int> _yearOptions = [];
+    private bool _isLoading = true;
+    private bool _isLoadingOptions = true;
+    private bool _isSaving;
+    private bool _canWrite;
+    private bool _dialogOpen;
+    private AnalystMetricDto? _editTarget;
+    private string _monthFilter = string.Empty;
+    private string _yearFilter = string.Empty;
+    private string _collaboratorFilter = string.Empty;
+    private string _projectFilter = string.Empty;
+    private int _defaultMonth;
+    private int _defaultYear;
+    private string? _loadError;
+    private string? _formError;
+    private string? _actionMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        (_defaultMonth, _defaultYear) = PayrollCompetenceDefaults.CurrentCompetence();
+        _monthFilter = _defaultMonth.ToString();
+        _yearFilter = _defaultYear.ToString();
+        _yearOptions = PayrollCompetenceDefaults.YearOptions().OrderDescending().ToList();
+
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _canWrite = (await AuthorizationService.AuthorizeAsync(
+            authState.User,
+            AppPolicies.AnalystMetricsWrite)).Succeeded;
+
+        await LoadOptionsAsync();
+        await LoadMetricsAsync();
+    }
+
+    private async Task LoadOptionsAsync()
+    {
+        _isLoadingOptions = true;
+        var collaborators = await CollaboratorApiService.GetCollaboratorsAsync(new(IsActive: true));
+        if (collaborators.Status == CollaboratorApiStatus.Success && collaborators.Collaborators is not null)
+        {
+            _collaborators.AddRange(collaborators.Collaborators);
+        }
+
+        var projects = await ProjectApiService.GetProjectsAsync();
+        if (projects.Status == ProjectApiStatus.Success && projects.Projects is not null)
+        {
+            _projects.AddRange(projects.Projects.Where(item => item.IsActive));
+        }
+
+        _isLoadingOptions = false;
+    }
+
+    private async Task LoadMetricsAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+        _metrics.Clear();
+
+        var result = await AnalystMetricApiService.GetMetricsAsync(
+            new AnalystMetricListQuery(
+                ParseInt(_monthFilter),
+                ParseInt(_yearFilter),
+                CollaboratorId: ParseGuid(_collaboratorFilter),
+                ProjectId: ParseGuid(_projectFilter)));
+        if (result.Status == AnalystMetricApiStatus.Success && result.Metrics is not null)
+        {
+            _metrics.AddRange(result.Metrics);
+        }
+        else
+        {
+            _loadError = AnalystMetricErrorMessages.ForList(result);
+        }
+
+        _isLoading = false;
+    }
+
+    private async Task OnMonthChangedAsync(string? value)
+    {
+        _monthFilter = value ?? string.Empty;
+        await LoadMetricsAsync();
+    }
+
+    private async Task OnYearChangedAsync(string? value)
+    {
+        _yearFilter = value ?? string.Empty;
+        await LoadMetricsAsync();
+    }
+
+    private async Task OnCollaboratorChangedAsync(string? value)
+    {
+        _collaboratorFilter = value ?? string.Empty;
+        await LoadMetricsAsync();
+    }
+
+    private async Task OnProjectChangedAsync(string? value)
+    {
+        _projectFilter = value ?? string.Empty;
+        await LoadMetricsAsync();
+    }
+
+    private Task OpenCreateDialogAsync()
+    {
+        _editTarget = null;
+        _formError = null;
+        _dialogOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private Task OpenEditDialogAsync(AnalystMetricDto metric)
+    {
+        _editTarget = metric;
+        _formError = null;
+        _dialogOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private Task OnDialogOpenChangedAsync(bool isOpen)
+    {
+        _dialogOpen = isOpen;
+        if (!isOpen)
+        {
+            _editTarget = null;
+            _formError = null;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task SaveAsync(AnalystMetricRequest request)
+    {
+        _isSaving = true;
+        _formError = null;
+        _actionMessage = null;
+
+        var result = _editTarget is null
+            ? await AnalystMetricApiService.CreateMetricAsync(request)
+            : await AnalystMetricApiService.UpdateMetricAsync(_editTarget.Id, request);
+        if (result.Status == AnalystMetricApiStatus.Success && result.Metric is not null)
+        {
+            _dialogOpen = false;
+            _editTarget = null;
+            _monthFilter = result.Metric.Month.ToString();
+            _yearFilter = result.Metric.Year.ToString();
+            _actionMessage = "Métrica salva com sucesso.";
+            await LoadMetricsAsync();
+        }
+        else
+        {
+            _formError = AnalystMetricErrorMessages.ForMutation(result);
+        }
+
+        _isSaving = false;
+    }
+
+    private static int? ParseInt(string value) =>
+        int.TryParse(value, out var parsed) ? parsed : null;
+
+    private static Guid? ParseGuid(string value) =>
+        Guid.TryParse(value, out var parsed) ? parsed : null;
+}

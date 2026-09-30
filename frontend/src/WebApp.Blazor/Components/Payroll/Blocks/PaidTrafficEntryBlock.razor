@@ -1,0 +1,195 @@
+<div class="payroll-nested-block">
+    <div class="payroll-nested-block__header">
+        <h3 class="payroll-nested-block__title">Projetos de tráfego</h3>
+        <Button Variant="ButtonVariant.Outline" Size="ButtonSize.Sm" OnClick="@AddProjectAsync">
+            <Icon Kind="IconKind.Plus" Size="IconSize.Default" />
+            Projeto
+        </Button>
+    </div>
+
+    @for (var i = 0; i < State.TrafficProjectEntries.Count; i++)
+    {
+        var index = i;
+        var entry = State.TrafficProjectEntries[index];
+        <div class="payroll-nested-block payroll-nested-block--inner">
+            <div class="payroll-nested-block__header">
+                <Select Label="Projeto" Value="@entry.ProjectId.ToString()" ValueChanged="@(v => UpdateProjectAsync(index, v))">
+                    @foreach (var option in Options.Projects)
+                    {
+                        <option value="@option.Id">@option.Name</option>
+                    }
+                </Select>
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Sm" OnClick="@(() => RemoveProjectAsync(index))">
+                    <Icon Kind="IconKind.Trash2" Size="IconSize.Default" />
+                </Button>
+            </div>
+            <Input Label="Valor investido" IsMoney="true" Value="@PayrollInputHelpers.FormatMoney(entry.InvestedAmount)"
+                   ValueChanged="@(v => UpdateInvestedAsync(index, v))" />
+
+            <div class="payroll-nested-block__header">
+                <h4 class="payroll-nested-block__subtitle">CPAs</h4>
+                <Button Variant="ButtonVariant.Outline" Size="ButtonSize.Sm" OnClick="@(() => AddCpaAsync(index))">
+                    <Icon Kind="IconKind.Plus" Size="IconSize.Default" />
+                    CPA
+                </Button>
+            </div>
+            @if (entry.CpaEntries is not null)
+            {
+                @for (var j = 0; j < entry.CpaEntries.Count; j++)
+                {
+                    var cpaIndex = j;
+                    var cpa = entry.CpaEntries[cpaIndex];
+                    <div class="payroll-nested-block__row">
+                        <Select Label="Casa" Value="@cpa.HouseKey" ValueChanged="@(v => UpdateCpaHouseAsync(index, cpaIndex, v))">
+                            @foreach (var house in TrafficHouseLabels.All)
+                            {
+                                <option value="@house.Key">@house.Label</option>
+                            }
+                        </Select>
+                        <Select Label="Tipo" Value="@cpa.Kind.ToString()" ValueChanged="@(v => UpdateCpaKindAsync(index, cpaIndex, v))">
+                            <option value="Supervised">Supervisionado</option>
+                            <option value="Manager">Gerente</option>
+                        </Select>
+                        <Input Label="Qtd" Kind="NumericInputKind.Integer" Value="@PayrollInputHelpers.FormatInt(cpa.Count)" ValueChanged="@(v => UpdateCpaCountAsync(index, cpaIndex, v))" />
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Sm" OnClick="@(() => RemoveCpaAsync(index, cpaIndex))">
+                            <Icon Kind="IconKind.Trash2" Size="IconSize.Default" />
+                        </Button>
+                    </div>
+                }
+            }
+        </div>
+    }
+
+    <div class="payroll-nested-block payroll-nested-block--inner">
+        <div class="payroll-nested-block__header">
+            <h4 class="payroll-nested-block__subtitle">Rateio por projeto</h4>
+            <Button Variant="ButtonVariant.Outline" Size="ButtonSize.Sm" OnClick="@AddRateioAsync">
+                <Icon Kind="IconKind.Plus" Size="IconSize.Default" />
+                Projeto
+            </Button>
+        </div>
+        @for (var i = 0; i < State.RateioProjectEntries.Count; i++)
+        {
+            var index = i;
+            var entry = State.RateioProjectEntries[index];
+            <div class="payroll-nested-block__row">
+                <Select Label="Projeto" Value="@entry.ProjectId.ToString()" ValueChanged="@(v => UpdateRateioProjectAsync(index, v))">
+                    @foreach (var option in Options.Projects)
+                    {
+                        <option value="@option.Id">@option.Name</option>
+                    }
+                </Select>
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Sm" OnClick="@(() => RemoveRateioAsync(index))">
+                    <Icon Kind="IconKind.Trash2" Size="IconSize.Default" />
+                </Button>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PayrollEntryEditState State { get; set; } = default!;
+    [Parameter, EditorRequired] public PayrollEditorOptionsDto Options { get; set; } = default!;
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private async Task AddProjectAsync()
+    {
+        var project = Options.Projects.FirstOrDefault();
+        if (project is null) return;
+        State.TrafficProjectEntries.Add(new TrafficProjectEntryDto(project.Id, 0m, []));
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task RemoveProjectAsync(int index)
+    {
+        State.TrafficProjectEntries.RemoveAt(index);
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateProjectAsync(int index, string? value)
+    {
+        if (!Guid.TryParse(value, out var projectId)) return;
+        var current = State.TrafficProjectEntries[index];
+        State.TrafficProjectEntries[index] = current with { ProjectId = projectId };
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateInvestedAsync(int index, string? value)
+    {
+        var current = State.TrafficProjectEntries[index];
+        State.TrafficProjectEntries[index] = current with { InvestedAmount = PayrollInputHelpers.ParseMoney(value) };
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task AddCpaAsync(int projectIndex)
+    {
+        var current = State.TrafficProjectEntries[projectIndex];
+        var cpas = current.CpaEntries?.ToList() ?? [];
+        cpas.Add(new TrafficCpaEntryDto("betano", TrafficCpaKind.Supervised, 0));
+        State.TrafficProjectEntries[projectIndex] = current with { CpaEntries = cpas };
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task RemoveCpaAsync(int projectIndex, int cpaIndex)
+    {
+        var current = State.TrafficProjectEntries[projectIndex];
+        var cpas = current.CpaEntries?.ToList() ?? [];
+        cpas.RemoveAt(cpaIndex);
+        State.TrafficProjectEntries[projectIndex] = current with { CpaEntries = cpas };
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateCpaHouseAsync(int projectIndex, int cpaIndex, string? value)
+    {
+        var current = State.TrafficProjectEntries[projectIndex];
+        var cpas = current.CpaEntries!.ToList();
+        var cpa = cpas[cpaIndex];
+        cpas[cpaIndex] = cpa with { HouseKey = value ?? "betano" };
+        State.TrafficProjectEntries[projectIndex] = current with { CpaEntries = cpas };
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateCpaKindAsync(int projectIndex, int cpaIndex, string? value)
+    {
+        var current = State.TrafficProjectEntries[projectIndex];
+        var cpas = current.CpaEntries!.ToList();
+        var cpa = cpas[cpaIndex];
+        var kind = Enum.TryParse<TrafficCpaKind>(value, out var parsed) ? parsed : TrafficCpaKind.Supervised;
+        cpas[cpaIndex] = cpa with { Kind = kind };
+        State.TrafficProjectEntries[projectIndex] = current with { CpaEntries = cpas };
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateCpaCountAsync(int projectIndex, int cpaIndex, string? value)
+    {
+        var current = State.TrafficProjectEntries[projectIndex];
+        var cpas = current.CpaEntries!.ToList();
+        var cpa = cpas[cpaIndex];
+        cpas[cpaIndex] = cpa with { Count = PayrollInputHelpers.ParseInt(value) };
+        State.TrafficProjectEntries[projectIndex] = current with { CpaEntries = cpas };
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task AddRateioAsync()
+    {
+        var project = Options.Projects.FirstOrDefault();
+        if (project is null) return;
+        State.RateioProjectEntries.Add(new RateioProjectEntryDto(project.Id));
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task RemoveRateioAsync(int index)
+    {
+        State.RateioProjectEntries.RemoveAt(index);
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UpdateRateioProjectAsync(int index, string? value)
+    {
+        if (!Guid.TryParse(value, out var projectId)) return;
+        var current = State.RateioProjectEntries[index];
+        State.RateioProjectEntries[index] = current with { ProjectId = projectId };
+        await OnChanged.InvokeAsync();
+    }
+
+}

@@ -1,0 +1,68 @@
+@using Microsoft.Extensions.Options
+@inject AuthService AuthService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JsRuntime
+@inject IOptions<SessionIdleOptions> IdleOptions
+@implements IAsyncDisposable
+
+@code {
+    private DotNetObjectReference<SessionIdleHost>? _dotNetRef;
+    private bool _started;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _started || !AuthService.IsAuthenticated)
+        {
+            return;
+        }
+
+        _dotNetRef = DotNetObjectReference.Create(this);
+        var timeoutMinutes = IdleOptions.Value.TimeoutMinutes;
+        if (timeoutMinutes < 1)
+        {
+            timeoutMinutes = SessionIdleOptions.DefaultTimeoutMinutes;
+        }
+
+        try
+        {
+            await JsRuntime.InvokeVoidAsync(
+                "corepaySessionIdle.start",
+                _dotNetRef,
+                timeoutMinutes * 60 * 1000);
+            _started = true;
+        }
+        catch (JSException)
+        {
+            // Ignora falhas de interop (ex.: ambiente de teste sem JS real).
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnIdleTimeoutAsync()
+    {
+        if (!AuthService.IsAuthenticated)
+        {
+            return;
+        }
+
+        await AuthService.LogoutAsync();
+        NavigationManager.NavigateTo("/login");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_started)
+        {
+            try
+            {
+                await JsRuntime.InvokeVoidAsync("corepaySessionIdle.stop");
+            }
+            catch (JSException)
+            {
+                // Ignora falhas de interop durante dispose.
+            }
+        }
+
+        _dotNetRef?.Dispose();
+    }
+}

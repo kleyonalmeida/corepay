@@ -1,0 +1,37 @@
+@using WebApp.Blazor.Formatting
+@if (!PayrollStatusMapper.IsEditable(Status))
+{
+    <div class="payroll-form__readonly">
+        <div class="payroll-form__readonly-card">
+            <StatusBadge Kind="@PayrollStatusMapper.ToStatusKind(Status)" />
+            <EmptyState Title="Folha não editável"
+                        Description="@GetDescription()">
+                <IconContent>
+                    <Icon Kind="IconKind.FileText" Size="IconSize.EmptyState" />
+                </IconContent>
+            </EmptyState>
+            <a class="ui-button ui-button--outline ui-button--md" href="@($"/payrolls/{PayrollId}")">
+                Ver detalhe
+            </a>
+        </div>
+    </div>
+}
+else if (ChildContent is not null)
+{
+    @ChildContent
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid PayrollId { get; set; }
+    [Parameter, EditorRequired] public string Status { get; set; } = string.Empty;
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private string GetDescription() =>
+        Status.ToLowerInvariant() switch
+        {
+            "pendingapproval" => "Esta folha está aguardando aprovação e não pode ser alterada.",
+            "approved" => "Esta folha já foi aprovada. Os valores estão travados.",
+            "paid" => "Esta folha já foi paga e não pode ser editada.",
+            _ => "Somente folhas em rascunho ou reprovadas podem ser editadas."
+        };
+}

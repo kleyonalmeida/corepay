@@ -1,0 +1,24 @@
+@inject AuthService AuthService
+@inject NavigationManager NavigationManager
+
+<Button Variant="ButtonVariant.Outline"
+        OnClick="HandleLogoutAsync"
+        AdditionalAttributes="@ButtonAttributes">
+    <Icon Kind="IconKind.LogOut" />
+    <span class="app-sidebar__logout-label">Sair</span>
+</Button>
+
+@code {
+    [Parameter] public string? Class { get; set; }
+
+    private Dictionary<string, object>? ButtonAttributes =>
+        string.IsNullOrWhiteSpace(Class)
+            ? null
+            : new Dictionary<string, object> { ["class"] = Class };
+
+    private async Task HandleLogoutAsync()
+    {
+        await AuthService.LogoutAsync();
+        NavigationManager.NavigateTo("/login", replace: true);
+    }
+}

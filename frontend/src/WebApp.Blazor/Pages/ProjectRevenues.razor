@@ -1,0 +1,11 @@
+@page "/project-revenues"
+@attribute [Authorize(Policy = AppPolicies.RevenuesRead)]
+
+<PageTitle>Faturamento — CorePay</PageTitle>
+
+<div class="project-revenues-page-header">
+    <h1 class="text-page-title">Faturamento</h1>
+    <p class="text-page-subtitle">Registre a realização por projeto e competência. Os valores não alimentam a folha automaticamente.</p>
+</div>
+
+<ProjectRevenuesSection />

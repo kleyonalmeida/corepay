@@ -1,0 +1,11 @@
+@{
+    var metadata = StatusBadgeMetadata.Get(Kind);
+}
+
+<span class="status-badge status-badge--pill @metadata.CssClass" data-status="@Kind.ToString()">
+    @metadata.Label
+</span>
+
+@code {
+    [Parameter] public StatusKind Kind { get; set; } = StatusKind.Draft;
+}

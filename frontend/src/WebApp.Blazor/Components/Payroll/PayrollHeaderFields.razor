@@ -1,0 +1,71 @@
+<div class="payroll-form__competence collaborators-filters">
+    <Select Label="Setor"
+            Value="@DepartmentValue"
+            ValueChanged="@OnDepartmentChanged"
+            Disabled="@Disabled">
+        <option value="">Selecione um setor</option>
+        @foreach (var department in Departments)
+        {
+            <option value="@department.Id">@department.Name</option>
+        }
+    </Select>
+
+    <Select Label="Mês"
+            Value="@MonthValue"
+            ValueChanged="@OnMonthChanged"
+            Disabled="@Disabled">
+        @foreach (var month in PayrollCompetenceDefaults.MonthOptions)
+        {
+            <option value="@month.Value">@month.Label</option>
+        }
+    </Select>
+
+    <Select Label="Ano"
+            Value="@YearValue"
+            ValueChanged="@OnYearChanged"
+            Disabled="@Disabled">
+        @foreach (var year in PayrollCompetenceDefaults.YearOptions())
+        {
+            <option value="@year">@year</option>
+        }
+    </Select>
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<PayrollFormDepartmentOptionDto> Departments { get; set; } = [];
+    [Parameter] public Guid? SelectedDepartmentId { get; set; }
+    [Parameter] public EventCallback<Guid?> SelectedDepartmentIdChanged { get; set; }
+    [Parameter] public int Month { get; set; }
+    [Parameter] public EventCallback<int> MonthChanged { get; set; }
+    [Parameter] public int Year { get; set; }
+    [Parameter] public EventCallback<int> YearChanged { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+
+    private string DepartmentValue => SelectedDepartmentId?.ToString() ?? string.Empty;
+    private string MonthValue => Month.ToString();
+    private string YearValue => Year.ToString();
+
+    private async Task OnDepartmentChanged(string? value)
+    {
+        SelectedDepartmentId = Guid.TryParse(value, out var id) ? id : null;
+        await SelectedDepartmentIdChanged.InvokeAsync(SelectedDepartmentId);
+    }
+
+    private async Task OnMonthChanged(string? value)
+    {
+        if (int.TryParse(value, out var month))
+        {
+            Month = month;
+            await MonthChanged.InvokeAsync(Month);
+        }
+    }
+
+    private async Task OnYearChanged(string? value)
+    {
+        if (int.TryParse(value, out var year))
+        {
+            Year = year;
+            await YearChanged.InvokeAsync(Year);
+        }
+    }
+}

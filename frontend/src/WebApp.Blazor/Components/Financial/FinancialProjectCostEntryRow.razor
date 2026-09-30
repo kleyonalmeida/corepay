@@ -1,0 +1,48 @@
+@using WebApp.Blazor.Formatting
+
+<div class="financial-project-cost-entry @(IsExpanded ? "financial-project-cost-entry--expanded" : null)">
+    <button type="button"
+            class="financial-project-cost-entry__header"
+            aria-expanded="@IsExpanded"
+            @onclick="ToggleExpanded">
+        <Icon Kind="IconKind.ChevronRight"
+              Size="IconSize.Default"
+              Class="@($"financial-project-cost-entry__chevron {(IsExpanded ? "financial-project-cost-entry__chevron--expanded" : null)}")" />
+        <div class="collaborators-table__identity">
+            <Avatar Name="@Entry.CollaboratorName" Size="AvatarSize.Sm" />
+            <div>
+                <p class="collaborators-table__name">@Entry.CollaboratorName</p>
+                <p class="collaborators-table__job-title">@(Entry.CareerLevelName ?? "—")</p>
+            </div>
+        </div>
+        <span class="financial-project-cost-entry__total tabular-nums">
+            @MoneyFormatter.FormatMoney(Entry.ProjectTotals?.Sum(t => t.Amount) ?? 0m)
+        </span>
+    </button>
+
+    @if (IsExpanded)
+    {
+        <div class="financial-project-cost-entry__body">
+            @if (Entry.ProjectTotals is { Count: > 0 })
+            {
+                <PayrollEntryBreakdownPanel Result="@null"
+                                            ProjectTotals="@Entry.ProjectTotals"
+                                            ProjectNames="@ProjectNames" />
+            }
+            else
+            {
+                <p class="financial-project-cost-entry__empty">Sem alocação por projeto</p>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public FinanceEntryDto Entry { get; set; } = default!;
+    [Parameter] public IReadOnlyDictionary<Guid, string> ProjectNames { get; set; } =
+        new Dictionary<Guid, string>();
+
+    private bool IsExpanded { get; set; }
+
+    private void ToggleExpanded() => IsExpanded = !IsExpanded;
+}

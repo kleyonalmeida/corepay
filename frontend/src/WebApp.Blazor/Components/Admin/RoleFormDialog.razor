@@ -1,0 +1,147 @@
+<Dialog IsOpen="@IsOpen" IsOpenChanged="@IsOpenChanged" Title="@DialogTitle" IsWide="true">
+    <div class="settings-form role-form">
+        @if (!string.IsNullOrWhiteSpace(DisplayError))
+        {
+            <p class="settings-form__error" role="alert">@DisplayError</p>
+        }
+
+        <Input Label="Nome do papel"
+               Placeholder="Ex.: Auditor"
+               Disabled="@IsSaving"
+               Value="@_name"
+               ValueChanged="@(value => _name = value ?? string.Empty)" />
+
+        <p class="settings-form__hint">
+            Selecione os acessos necessários. As escolhas controlam a interface e cada endpoint da API valida novamente a permissão no banco.
+        </p>
+
+        @foreach (var group in GroupedPermissions)
+        {
+            <fieldset class="settings-form__fieldset role-access-group">
+                <legend class="settings-form__legend">@group.Key</legend>
+                <ul class="role-access-list">
+                    @foreach (var item in group)
+                    {
+                        <li class="role-access-list__item">
+                            <label class="role-access-list__label">
+                                <input type="checkbox"
+                                       class="settings-checkbox-list__input"
+                                       checked="@IsSelected(item.Permission.Key)"
+                                       disabled="@IsSaving"
+                                       @onchange="@(args => TogglePermission(item.Permission.Key, args))" />
+                                <span class="role-access-list__content">
+                                    <span class="role-access-list__title">@item.Descriptor.Label</span>
+                                    <span class="role-access-list__description">@item.Descriptor.Description</span>
+                                    <span class="role-access-list__route">@item.Descriptor.Route · @item.Permission.Key</span>
+                                </span>
+                            </label>
+                        </li>
+                    }
+                </ul>
+            </fieldset>
+        }
+
+        <FormDialogActions IsSaving="@IsSaving"
+                           SubmitLabel="@(IsSaving ? "Salvando..." : "Salvar papel")"
+                           OnSubmit="@SubmitAsync"
+                           OnCancel="@CancelAsync" />
+    </div>
+</Dialog>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+    [Parameter] public RoleDto? EditTarget { get; set; }
+    [Parameter] public IReadOnlyList<PermissionDto> Permissions { get; set; } = [];
+    [Parameter] public bool IsSaving { get; set; }
+    [Parameter] public string? ErrorMessage { get; set; }
+    [Parameter] public EventCallback<RoleFormSubmit> OnSubmit { get; set; }
+
+    private string _name = string.Empty;
+    private readonly HashSet<string> _selectedPermissions = new(StringComparer.OrdinalIgnoreCase);
+    private string? _localError;
+    private string? _initializedRoleId;
+    private bool _initializedForCreate;
+
+    private string DialogTitle => EditTarget is null ? "Novo papel" : $"Editar {EditTarget.Name}";
+    private string? DisplayError => _localError ?? ErrorMessage;
+    private IEnumerable<IGrouping<string, PermissionView>> GroupedPermissions => Permissions
+        .Select(permission => new PermissionView(permission, RoleAccessCatalog.For(permission)))
+        .OrderBy(item => item.Descriptor.Area)
+        .ThenBy(item => item.Descriptor.Label)
+        .GroupBy(item => item.Descriptor.Area);
+
+    protected override void OnParametersSet()
+    {
+        if (!IsOpen)
+        {
+            _initializedRoleId = null;
+            _initializedForCreate = false;
+            return;
+        }
+
+        if (EditTarget is null)
+        {
+            if (_initializedForCreate)
+            {
+                return;
+            }
+
+            _name = string.Empty;
+            _selectedPermissions.Clear();
+            _localError = null;
+            _initializedForCreate = true;
+            return;
+        }
+
+        if (string.Equals(_initializedRoleId, EditTarget.Id, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _name = EditTarget.Name;
+        _selectedPermissions.Clear();
+        _selectedPermissions.UnionWith(EditTarget.PermissionKeys);
+        _localError = null;
+        _initializedRoleId = EditTarget.Id;
+        _initializedForCreate = false;
+    }
+
+    private bool IsSelected(string key) => _selectedPermissions.Contains(key);
+
+    private void TogglePermission(string key, ChangeEventArgs args)
+    {
+        if (args.Value is true)
+        {
+            _selectedPermissions.Add(key);
+        }
+        else
+        {
+            _selectedPermissions.Remove(key);
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        _localError = null;
+        if (string.IsNullOrWhiteSpace(_name))
+        {
+            _localError = "Informe o nome do papel.";
+            return;
+        }
+
+        if (_selectedPermissions.Count == 0)
+        {
+            _localError = "Selecione ao menos uma permissão.";
+            return;
+        }
+
+        await OnSubmit.InvokeAsync(new RoleFormSubmit(
+            _name.Trim(),
+            _selectedPermissions.OrderBy(key => key, StringComparer.OrdinalIgnoreCase).ToList()));
+    }
+
+    private Task CancelAsync() => IsOpenChanged.InvokeAsync(false);
+
+    private sealed record PermissionView(PermissionDto Permission, RoleAccessDescriptor Descriptor);
+}

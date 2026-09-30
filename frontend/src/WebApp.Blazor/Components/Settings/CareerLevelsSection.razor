@@ -1,0 +1,188 @@
+@inject ICareerLevelApiService CareerLevelApiService
+@inject IDepartmentApiService DepartmentApiService
+
+<Card Class="settings-section-card">
+    <HeaderContent>
+        <SectionCardHeader Title="Níveis de carreira" Icon="IconKind.TrendingUp">
+            <Actions>
+                <Button Size="ButtonSize.Sm" OnClick="@OpenCreateDialogAsync">
+                    Novo nível
+                </Button>
+            </Actions>
+        </SectionCardHeader>
+    </HeaderContent>
+    <ChildContent>
+        @if (_isLoading)
+        {
+            <div class="settings-section__loading">
+                <Spinner Label="Carregando níveis..." />
+            </div>
+        }
+        else if (!string.IsNullOrWhiteSpace(_loadError))
+        {
+            <EmptyState Title="Erro ao carregar níveis" Description="@_loadError" />
+        }
+        else if (_careerLevels.Count == 0)
+        {
+            <EmptyState Title="Nenhum nível cadastrado"
+                        Description="Crie o primeiro nível para configurar salários e comissões." />
+        }
+        else
+        {
+            <div class="settings-table-wrapper">
+                <table class="settings-table">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Setor</th>
+                            <th>Perfil</th>
+                            <th>Salário</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var level in _careerLevels)
+                        {
+                            <tr>
+                                <td>@level.Name</td>
+                                <td>@ResolveDepartmentName(level.DepartmentId)</td>
+                                <td>@CalculationProfileLabels.GetLabel(level.Profile)</td>
+                                <td class="text-table-money">@MoneyFormatter.FormatMoney(level.BaseSalary)</td>
+                                <td>
+                                    <StatusBadge Kind="@(level.IsActive ? StatusKind.Active : StatusKind.Inactive)" />
+                                </td>
+                                <td class="settings-table__actions">
+                                    <Button Variant="ButtonVariant.Ghost"
+                                            Size="ButtonSize.Sm"
+                                            OnClick="@(() => OpenEditDialogAsync(level))">
+                                        Editar
+                                    </Button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </ChildContent>
+</Card>
+
+<CareerLevelFormDialog IsOpen="@_dialogOpen"
+                       IsOpenChanged="@OnDialogOpenChangedAsync"
+                       EditTarget="@_editTarget"
+                       Departments="@_departments"
+                       IsSaving="@_isSaving"
+                       ErrorMessage="@_formError"
+                       OnSubmit="@SaveAsync" />
+
+@code {
+    private readonly List<CareerLevelDto> _careerLevels = [];
+    private readonly List<DepartmentDto> _departments = [];
+    private bool _isLoading = true;
+    private string? _loadError;
+    private bool _dialogOpen;
+    private bool _isSaving;
+    private string? _formError;
+    private CareerLevelDto? _editTarget;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+
+        var levelsTask = CareerLevelApiService.GetCareerLevelsAsync();
+        var departmentsTask = DepartmentApiService.GetDepartmentsAsync();
+
+        await Task.WhenAll(levelsTask, departmentsTask);
+
+        var levelsResult = await levelsTask;
+        var departmentsResult = await departmentsTask;
+
+        _careerLevels.Clear();
+        _departments.Clear();
+
+        if (levelsResult.Status == CareerLevelApiStatus.Success && levelsResult.CareerLevels is not null)
+        {
+            _careerLevels.AddRange(levelsResult.CareerLevels);
+        }
+        else
+        {
+            _loadError = CareerLevelErrorMessages.ForList(levelsResult);
+        }
+
+        if (departmentsResult.Status == DepartmentApiStatus.Success && departmentsResult.Departments is not null)
+        {
+            _departments.AddRange(departmentsResult.Departments);
+        }
+
+        _isLoading = false;
+    }
+
+    private string ResolveDepartmentName(Guid? departmentId)
+    {
+        if (departmentId is null)
+        {
+            return "Geral";
+        }
+
+        var department = _departments.FirstOrDefault(d => d.Id == departmentId);
+        return department?.Name ?? "—";
+    }
+
+    private Task OpenCreateDialogAsync()
+    {
+        _editTarget = null;
+        _formError = null;
+        _dialogOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private Task OpenEditDialogAsync(CareerLevelDto level)
+    {
+        _editTarget = level;
+        _formError = null;
+        _dialogOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private Task OnDialogOpenChangedAsync(bool isOpen)
+    {
+        _dialogOpen = isOpen;
+        if (!isOpen)
+        {
+            _editTarget = null;
+            _formError = null;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task SaveAsync(CareerLevelRequest request)
+    {
+        _isSaving = true;
+        _formError = null;
+
+        CareerLevelMutationResult result = _editTarget is null
+            ? await CareerLevelApiService.CreateCareerLevelAsync(request)
+            : await CareerLevelApiService.UpdateCareerLevelAsync(_editTarget.Id, request);
+
+        if (result.Status == CareerLevelApiStatus.Success && result.CareerLevel is not null)
+        {
+            _dialogOpen = false;
+            _editTarget = null;
+            await LoadDataAsync();
+        }
+        else
+        {
+            _formError = CareerLevelErrorMessages.ForMutation(result);
+        }
+
+        _isSaving = false;
+    }
+}

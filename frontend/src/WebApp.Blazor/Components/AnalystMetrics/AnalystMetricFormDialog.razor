@@ -1,0 +1,177 @@
+<Dialog IsOpen="@IsOpen" IsOpenChanged="@IsOpenChanged" Title="@DialogTitle" IsWide="true">
+    <div class="settings-form">
+        @if (!string.IsNullOrWhiteSpace(DisplayError))
+        {
+            <p class="settings-form__error" role="alert">@DisplayError</p>
+        }
+
+        <Select Label="Colaborador"
+                Value="@_collaboratorId"
+                ValueChanged="@OnCollaboratorChangedAsync"
+                Disabled="@IsSaving">
+            <option value="">Selecione um colaborador</option>
+            @foreach (var collaborator in Collaborators.Where(item => item.IsActive).OrderBy(item => item.Name))
+            {
+                <option value="@collaborator.Id">@collaborator.Name — @collaborator.DepartmentName</option>
+            }
+        </Select>
+
+        <Select Label="Projeto"
+                Value="@_projectId"
+                ValueChanged="@OnProjectChangedAsync"
+                Disabled="@IsSaving">
+            <option value="">Selecione um projeto</option>
+            @foreach (var project in Projects.Where(item => item.IsActive).OrderBy(item => item.Name))
+            {
+                <option value="@project.Id">@project.Name</option>
+            }
+        </Select>
+
+        <div class="analyst-metrics-form__row">
+            <Select Label="Mês" Value="@_month" ValueChanged="@OnMonthChangedAsync" Disabled="@IsSaving">
+                @foreach (var option in PayrollCompetenceDefaults.MonthOptions)
+                {
+                    <option value="@option.Value">@option.Label</option>
+                }
+            </Select>
+            <Select Label="Ano" Value="@_year" ValueChanged="@OnYearChangedAsync" Disabled="@IsSaving">
+                @foreach (var year in YearOptions)
+                {
+                    <option value="@year">@year</option>
+                }
+            </Select>
+        </div>
+
+        <div class="analyst-metrics-form__row">
+            <Input Label="FTD total"
+                   Kind="NumericInputKind.Integer"
+                   Value="@_ftdTotal"
+                   ValueChanged="@(value => _ftdTotal = value ?? string.Empty)"
+                   Disabled="@IsSaving" />
+            <Input Label="CPA (quantidade)"
+                   Kind="NumericInputKind.Integer"
+                   Value="@_cpaCount"
+                   ValueChanged="@(value => _cpaCount = value ?? string.Empty)"
+                   Disabled="@IsSaving" />
+        </div>
+
+        <FormDialogActions IsSaving="@IsSaving"
+                           SubmitLabel="@(IsSaving ? "Salvando..." : "Salvar")"
+                           OnSubmit="@SubmitAsync"
+                           OnCancel="@CancelAsync" />
+    </div>
+</Dialog>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+    [Parameter] public AnalystMetricDto? EditTarget { get; set; }
+    [Parameter] public IReadOnlyList<CollaboratorDto> Collaborators { get; set; } = [];
+    [Parameter] public IReadOnlyList<ProjectDto> Projects { get; set; } = [];
+    [Parameter] public IReadOnlyList<int> YearOptions { get; set; } = [];
+    [Parameter] public int DefaultMonth { get; set; } = 1;
+    [Parameter] public int DefaultYear { get; set; } = 2026;
+    [Parameter] public bool IsSaving { get; set; }
+    [Parameter] public string? ErrorMessage { get; set; }
+    [Parameter] public EventCallback<AnalystMetricRequest> OnSubmit { get; set; }
+
+    private string _collaboratorId = string.Empty;
+    private string _projectId = string.Empty;
+    private string _month = "1";
+    private string _year = "2026";
+    private string _ftdTotal = "0";
+    private string _cpaCount = "0";
+    private string? _localError;
+
+    private string DialogTitle => EditTarget is null ? "Nova métrica" : "Editar métrica";
+    private string? DisplayError => _localError ?? ErrorMessage;
+
+    protected override void OnParametersSet()
+    {
+        if (!IsOpen)
+        {
+            return;
+        }
+
+        _localError = null;
+        if (EditTarget is null)
+        {
+            _collaboratorId = string.Empty;
+            _projectId = string.Empty;
+            _month = DefaultMonth.ToString();
+            _year = DefaultYear.ToString();
+            _ftdTotal = "0";
+            _cpaCount = "0";
+            return;
+        }
+
+        _collaboratorId = EditTarget.CollaboratorId.ToString();
+        _projectId = EditTarget.ProjectId.ToString();
+        _month = EditTarget.Month.ToString();
+        _year = EditTarget.Year.ToString();
+        _ftdTotal = EditTarget.FtdTotal.ToString();
+        _cpaCount = EditTarget.CpaCount.ToString();
+    }
+
+    private Task OnCollaboratorChangedAsync(string? value)
+    {
+        _collaboratorId = value ?? string.Empty;
+        return Task.CompletedTask;
+    }
+
+    private Task OnProjectChangedAsync(string? value)
+    {
+        _projectId = value ?? string.Empty;
+        return Task.CompletedTask;
+    }
+
+    private Task OnMonthChangedAsync(string? value)
+    {
+        _month = value ?? DefaultMonth.ToString();
+        return Task.CompletedTask;
+    }
+
+    private Task OnYearChangedAsync(string? value)
+    {
+        _year = value ?? DefaultYear.ToString();
+        return Task.CompletedTask;
+    }
+
+    private async Task CancelAsync()
+    {
+        IsOpen = false;
+        await IsOpenChanged.InvokeAsync(false);
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (!Guid.TryParse(_collaboratorId, out var collaboratorId))
+        {
+            _localError = "Selecione um colaborador.";
+            return;
+        }
+
+        if (!Guid.TryParse(_projectId, out var projectId))
+        {
+            _localError = "Selecione um projeto.";
+            return;
+        }
+
+        if (!int.TryParse(_month, out var month) || month is < 1 or > 12
+            || !int.TryParse(_year, out var year))
+        {
+            _localError = "Selecione uma competência válida.";
+            return;
+        }
+
+        if (!DecimalInputParser.TryParseInt(_ftdTotal, out var ftdTotal) || ftdTotal < 0
+            || !DecimalInputParser.TryParseInt(_cpaCount, out var cpaCount) || cpaCount < 0)
+        {
+            _localError = "FTD e CPA devem ser números inteiros não negativos.";
+            return;
+        }
+
+        await OnSubmit.InvokeAsync(
+            new AnalystMetricRequest(collaboratorId, projectId, month, year, ftdTotal, cpaCount));
+    }
+}
