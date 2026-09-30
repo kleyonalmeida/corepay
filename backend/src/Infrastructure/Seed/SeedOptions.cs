@@ -10,10 +10,6 @@ public sealed class SeedOptions
 
     public bool LoadDemoData { get; set; }
 
-    public bool LoadLegacyData { get; set; }
-
-    public string LegacyDataDirectory { get; set; } = string.Empty;
-
     public string RoleUsersPassword { get; set; } = string.Empty;
 }
 

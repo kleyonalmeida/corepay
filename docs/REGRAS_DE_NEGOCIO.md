@@ -7,7 +7,7 @@ Valores de taxa listados como “padrão” são fallbacks do código quando o n
 
 ## 1. O que o sistema faz
 
-Aplicação interna do Grupo Royalty para:
+Aplicação interna para:
 
 - montar e aprovar **folha de pagamento mensal por setor**;
 - calcular **salário, comissão, bônus, desconto e rateio por projeto**;
@@ -34,8 +34,8 @@ Pagamento ao colaborador é via **PIX** (`Collaborator.pix_key`). Não há proce
 
 ### 2.2 Exceções por e-mail
 
-- `rh@gruporoyalty.com` — menu **Colaboradores** mesmo sem papel `admin`/`manager`.
-- `trafego@gruporoyalty.com` — menu **Investimento Tráfego** mesmo sem papel `admin`.
+- `rh@corepay.test` — menu **Colaboradores** mesmo sem papel `admin`/`manager`.
+- `trafego@corepay.test` — menu **Investimento Tráfego** mesmo sem papel `admin`.
 
 ### 2.3 Quem pode o quê na folha
 

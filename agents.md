@@ -1,6 +1,6 @@
 # Prompt de Instruções para Desenvolvimento do CorePay (`agents.md`)
 
-Este documento serve como instrução mestra (`agents.md`) para ser fornecido à LLM (ou equipe de engenharia) para o desenvolvimento autônomo do sistema interno de folha, financeiro e tráfego do Grupo Royalty.
+Este documento serve como instrução mestra (`agents.md`) para ser fornecido à LLM (ou equipe de engenharia) para o desenvolvimento autônomo do sistema interno de folha, financeiro e tráfego.
 
 A fonte operacional das fórmulas e do workflow da folha é [`docs/REGRAS_DE_NEGOCIO.md`](docs/REGRAS_DE_NEGOCIO.md). Este arquivo define **arquitetura, stack, contratos e invariantes**. Não duplicar fórmulas aqui — implementar e testar a partir das regras de negócio.
 
@@ -87,8 +87,8 @@ A documentação do repositório é a fonte da verdade para o agente e para a eq
 2. **Identity Framework Integration:**
    * Tabela estendida `AppUser : IdentityUser` para `DisplayName`, coleção de setores do gerente (`UserDepartments`) e flags operacionais mínimas. Escopo de gerente **não** usa e-mail hardcoded.
 3. **Substituir exceções por e-mail do legado:**
-   * `rh@gruporoyalty.com` → permissão `collaborators.read` (e write se aplicável), atribuída a um papel/usuário.
-   * `trafego@gruporoyalty.com` → permissão `traffic.read` / `traffic.write`.
+   * `rh@corepay.test` → permissão `collaborators.read` (e write se aplicável), atribuída a um papel/usuário.
+   * `trafego@corepay.test` → permissão `traffic.read` / `traffic.write`.
    * Nunca ramificar autorização por endereço de e-mail.
 
 ### Papéis de referência e políticas

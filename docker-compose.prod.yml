@@ -37,8 +37,6 @@ services:
       Facilities__WebhookSecret: ${Facilities__WebhookSecret:?Facilities__WebhookSecret is required}
       Seed__SuperAdmin__Email: ${Seed__SuperAdmin__Email:?Seed__SuperAdmin__Email is required}
       Seed__SuperAdmin__Password: ${Seed__SuperAdmin__Password:?Seed__SuperAdmin__Password is required}
-      Seed__LoadLegacyData: ${Seed__LoadLegacyData:-false}
-      Seed__LegacyDataDirectory: /app/seed
       Cors__AllowedOrigins: ${Cors__AllowedOrigins:?Cors__AllowedOrigins is required}
     depends_on:
       sqlserver:
@@ -74,4 +72,3 @@ volumes:
 networks:
   corepay-prod-net:
     driver: bridge
-

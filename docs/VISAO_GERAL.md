@@ -7,7 +7,7 @@ Para implementação e fórmulas detalhadas, consulte os demais arquivos em `doc
 
 ## 1. O que é o CorePay
 
-O **CorePay** é um sistema interno do **Grupo Royalty** para gestão de pagamentos e finanças operacionais. Ele substitui o legado **FolhaPay** (Base44 / SPA JavaScript) com uma arquitetura moderna, mas **preservando o mesmo resultado numérico e os mesmos workflows de negócio**.
+O **CorePay** é um sistema interno para gestão de pagamentos e finanças operacionais. Ele substitui o legado **FolhaPay** (Base44 / SPA JavaScript) com uma arquitetura moderna, mas **preservando o mesmo resultado numérico e os mesmos workflows de negócio**.
 
 Em resumo, o sistema permite:
 

@@ -146,30 +146,6 @@ using (var scope = app.Services.CreateScope())
 
     var seedOptions = scope.ServiceProvider.GetRequiredService<
         Microsoft.Extensions.Options.IOptions<SeedOptions>>().Value;
-    if (seedOptions.LoadLegacyData)
-    {
-        if (string.IsNullOrWhiteSpace(seedOptions.LegacyDataDirectory))
-        {
-            throw new InvalidOperationException(
-                "Seed:LegacyDataDirectory is required when Seed:LoadLegacyData is enabled.");
-        }
-
-        var legacyReport = await new LegacyDataSeeder(dbContext).SeedAsync(
-            seedOptions.LegacyDataDirectory);
-        if (!legacyReport.Succeeded)
-        {
-            throw new InvalidOperationException(
-                $"Legacy seed failed: {string.Join("; ", legacyReport.Errors.Select(x => x.Message))}");
-        }
-
-        app.Logger.LogInformation(
-            "Legacy seed completed. Departments={Departments}, CareerLevels={CareerLevels}, Collaborators={Collaborators}, PendingDates={PendingDates}",
-            legacyReport.Entities["departments"].Created,
-            legacyReport.Entities["careerLevels"].Created,
-            legacyReport.Entities["collaborators"].Created,
-            legacyReport.PendingModifications.Count);
-    }
-
     if (app.Environment.IsDevelopment())
     {
         if (seedOptions.LoadFixtures)

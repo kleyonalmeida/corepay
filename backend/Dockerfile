@@ -24,7 +24,5 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /app/publish .
-COPY Department_export.csv CareerLevel_export.csv Collaborator_export.csv /app/seed/
-
 USER $APP_UID
 ENTRYPOINT ["dotnet", "WebAPI.dll"]

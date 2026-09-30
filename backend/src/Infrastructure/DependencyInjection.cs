@@ -59,8 +59,6 @@ public static class DependencyInjection
                 options.SuperAdmin = bound.SuperAdmin;
                 options.LoadFixtures = bound.LoadFixtures;
                 options.LoadDemoData = bound.LoadDemoData;
-                options.LoadLegacyData = bound.LoadLegacyData;
-                options.LegacyDataDirectory = bound.LegacyDataDirectory;
                 options.RoleUsersPassword = bound.RoleUsersPassword;
             });
 

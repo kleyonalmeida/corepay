@@ -60,7 +60,7 @@ Autenticação por e-mail e senha. Acesso anônimo.
 
 ```json
 {
-  "email": "superadmin@gruporoyalty.com",
+  "email": "superadmin@corepay.test",
   "password": "ChangeMe-SuperAdmin-Password-123!"
 }
 ```
@@ -73,7 +73,7 @@ Autenticação por e-mail e senha. Acesso anônimo.
   "expiresAtUtc": "2026-09-09T19:00:00.0000000Z",
   "user": {
     "id": "uuid",
-    "email": "superadmin@gruporoyalty.com",
+    "email": "superadmin@corepay.test",
     "displayName": "Super Admin",
     "roles": ["SuperAdmin"],
     "permissions": ["departments.read", "departments.write"]
@@ -1327,7 +1327,7 @@ Auth: `users.read`.
 ```json
 {
   "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  "email": "manager@gruporoyalty.com",
+  "email": "manager@corepay.test",
   "displayName": "Gerente Regional",
   "roleNames": ["Manager"],
   "departmentIds": ["7c9e6679-7425-40de-944b-e07fc1f90ae7"]
@@ -1344,7 +1344,7 @@ Auth: `users.write`. **Response 201** + `Location`.
 
 ```json
 {
-  "email": "manager@gruporoyalty.com",
+  "email": "manager@corepay.test",
   "password": "ChangeMe-Password-123!",
   "displayName": "Gerente Regional",
   "roleNames": ["Manager"],
@@ -1642,7 +1642,7 @@ Auth: `collaborators.read`.
     "dismissalDate": null,
     "pixKey": "11999990001",
     "baseSalary": 3500.00,
-    "email": "ana.comercial@gruporoyalty.com",
+    "email": "ana.comercial@corepay.test",
     "photoUrl": null,
     "isActive": true,
     "calculationProfileOverride": null
@@ -1676,7 +1676,7 @@ Auth: `collaborators.write`. **201** + `Location`. Body:
   "dismissalDate": null,
   "pixKey": "11999990001",
   "baseSalary": 3500.00,
-  "email": "carla@gruporoyalty.com",
+  "email": "carla@corepay.test",
   "photoUrl": null,
   "isActive": true,
   "calculationProfileOverride": "commercialAnalyst"

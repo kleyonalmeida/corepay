@@ -205,8 +205,6 @@ public static class SeedOptionsConfiguration
             },
             LoadFixtures = configuration.GetValue<bool>("Seed:LoadFixtures"),
             LoadDemoData = configuration.GetValue<bool>("Seed:LoadDemoData"),
-            LoadLegacyData = configuration.GetValue<bool>("Seed:LoadLegacyData"),
-            LegacyDataDirectory = configuration["Seed:LegacyDataDirectory"] ?? string.Empty,
             RoleUsersPassword = configuration["DEV_ROLE_USERS_PASSWORD"]
                 ?? configuration["Seed:RoleUsersPassword"]
                 ?? string.Empty

@@ -1,6 +1,6 @@
 # CorePay
 
-Sistema interno de folha de pagamento, financeiro, investimento de tráfego e fluxo de caixa do Grupo Royalty. Arquitetura desacoplada: **API REST (.NET 10)** + **SPA Blazor WebAssembly (.NET 10)**, comunicando-se via HTTP versionado (`/api/v1/...`).
+Sistema interno de folha de pagamento, financeiro, investimento de tráfego e fluxo de caixa. Arquitetura desacoplada: **API REST (.NET 10)** + **SPA Blazor WebAssembly (.NET 10)**, comunicando-se via HTTP versionado (`/api/v1/...`).
 
 ## Stack
 
@@ -262,4 +262,4 @@ Para executar os testes do motor localmente, use o filtro `PayrollCalculation` i
 | [docs/IDENTIDADE_VISUAL.md](docs/IDENTIDADE_VISUAL.md) | Tokens e componentes UI |
 | [docs/design.md](docs/design.md) | Contratos de API e rotas Blazor |
 | [docs/roadmap.md](docs/roadmap.md) | Ordem de implementação |
-
+| [RELATORIO_TECNICO.md](RELATORIO_TECNICO.md) | Tecnologias, arquitetura, banco, frontend e segurança |

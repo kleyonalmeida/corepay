@@ -144,7 +144,7 @@ public class UsersSectionTests : BlazorComponentTestContext
         cut.WaitForAssertion(() => cut.Find("input[placeholder='Nome de exibição']").Should().NotBeNull());
 
         cut.Find("input[placeholder='Nome de exibição']").Input("Novo Gerente");
-        cut.Find("input[placeholder='usuario@gruporoyalty.com']").Input("manager@corepay.test");
+        cut.Find("input[placeholder='usuario@corepay.test']").Input("manager@corepay.test");
         cut.Find("input[placeholder='Mínimo 8 caracteres']").Input("TestPassword123!");
 
         await cut.InvokeAsync(() =>
@@ -209,7 +209,7 @@ public class UsersSectionTests : BlazorComponentTestContext
         cut.WaitForAssertion(() => cut.Markup.Should().Contain("Novo usuário"));
         cut.FindAll("button").First(button => button.TextContent?.Contains("Novo usuário") == true).Click();
         cut.Find("input[placeholder='Nome de exibição']").Input("Dup User");
-        cut.Find("input[placeholder='usuario@gruporoyalty.com']").Input("dup@corepay.test");
+        cut.Find("input[placeholder='usuario@corepay.test']").Input("dup@corepay.test");
         cut.Find("input[placeholder='Mínimo 8 caracteres']").Input("TestPassword123!");
         cut.FindAll("input[type='checkbox']")
             .First(input => input.ParentElement?.TextContent?.Contains("User") == true)
