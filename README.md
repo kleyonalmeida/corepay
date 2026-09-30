@@ -252,10 +252,6 @@ dotnet test CorePay.Frontend.slnx
 
 Para executar os testes do motor localmente, use o filtro `PayrollCalculation` indicado acima.
 
-## Seed Base44
-
-Há uma seed transacional e idempotente para setores, níveis e colaboradores, opcional e desabilitada por padrão, sem mudanças no modelo da V1. Consulte [docs/SEED_BASE44.md](docs/SEED_BASE44.md).
-
 ## Documentação
 
 | Arquivo | Uso |
@@ -266,4 +262,4 @@ Há uma seed transacional e idempotente para setores, níveis e colaboradores, o
 | [docs/IDENTIDADE_VISUAL.md](docs/IDENTIDADE_VISUAL.md) | Tokens e componentes UI |
 | [docs/design.md](docs/design.md) | Contratos de API e rotas Blazor |
 | [docs/roadmap.md](docs/roadmap.md) | Ordem de implementação |
-| [docs/SEED_BASE44.md](docs/SEED_BASE44.md) | Seed Base44 e pendências de datas |
+
